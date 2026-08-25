@@ -1,0 +1,13 @@
+[package]
+  cjc-version = "1.0.5"
+  name = "glyphnet_smoke"
+  description = "GlyphNet end-to-end smoke test / demo."
+  version = "0.1.0"
+  output-type = "executable"
+
+[dependencies]
+  glyphnet = { path = "../.." }
+
+# The final executable is what actually links, so it needs libssh2 too.
+[ffi.c]
+  ssh2 = { path = "../../vendor/lib" }

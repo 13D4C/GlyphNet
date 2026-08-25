@@ -1,0 +1,26 @@
+[package]
+  cjc-version = "1.0.5"
+  name = "glyphnet"
+  description = "GlyphNet - SSH automation for network devices (netmiko-style), built on libssh2 via C FFI."
+  version = "0.1.0"
+  target-dir = ""
+  output-type = "static"
+  compile-option = ""
+  override-compile-option = ""
+  link-option = ""
+  package-configuration = {}
+
+[dependencies]
+
+# Link-time resolution of libssh2.
+# The KEY here is the real C library base name (-lssh2 -> libssh2.so); `path` is
+# the directory searched for it. `vendor/lib/libssh2.so` is a repo-local symlink to
+# the system-installed /usr/lib/<triple>/libssh2.so.1 -- see vendor/README.md.
+# NOTE: this MUST be a top-level [ffi.c] table. A [target.<triple>.ffi.c] table is
+# only consulted for cross-compilation (`cjpm build --target <triple>`) and is
+# silently ignored for native builds.
+[ffi.c]
+  ssh2 = { path = "vendor/lib" }
+
+[target.aarch64-unknown-linux-gnu.ffi.c]
+  ssh2 = { path = "vendor/lib" }

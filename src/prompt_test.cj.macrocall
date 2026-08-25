@@ -1,0 +1,432 @@
+package glyphnet
+
+import std.unittest.*
+import std.unittest.testmacro.*
+
+/* ===== Emitted by MacroCall @Test in prompt_test.cj:6:1 ===== */
+/* 6.1 */@Attribute[TEST_GENERATED] class PromptTests <: TestClass {
+/* 6.2 */    @Attribute[TestCase_24]
+/* 6.3 */    func stripsCsiColourCodes(): Unit {
+/* 6.4 */        let raw = "\u{1b}[01;32mnetadmin@host\u{1b}[00m:\u{1b}[01;34m~\u{1b}[00m$ "
+/* 6.5 */        expectEqual("stripAnsiEscapes(raw)", "\"netadmin@host:~$ \"", stripAnsiEscapes(raw), "netadmin@host:~$ ", isDelta: false)
+/* 6.6 */    }
+/* 6.7 */    
+/* 6.8 */    @Attribute[TestCase_25]
+/* 6.9 */    func stripsOscTitleSequence(): Unit {
+/* 6.10 */        let raw = "\u{1b}]0;netadmin@host: ~\u{07}Router#"
+/* 6.11 */        expectEqual("stripAnsiEscapes(raw)", "\"Router#\"", stripAnsiEscapes(raw), "Router#", isDelta: false)
+/* 6.12 */    }
+/* 6.13 */    
+/* 6.14 */    @Attribute[TestCase_26]
+/* 6.15 */    func stripsCursorMovesAndKeepsText(): Unit {
+/* 6.16 */        let raw = "line one\u{1b}[K\nline two\u{1b}[2J"
+/* 6.17 */        expectEqual("stripAnsiEscapes(raw)", "\"line one\\nline two\"", stripAnsiEscapes(raw), "line one\nline two", isDelta: false)
+/* 6.18 */    }
+/* 6.19 */    
+/* 6.20 */    @Attribute[TestCase_27]
+/* 6.21 */    func leavesPlainTextAlone(): Unit {
+/* 6.22 */        let raw = "Cisco IOS Software, Version 15.2"
+/* 6.23 */        expectEqual("stripAnsiEscapes(raw)", "raw", stripAnsiEscapes(raw), raw, isDelta: false)
+/* 6.24 */    }
+/* 6.25 */    
+/* 6.26 */    @Attribute[TestCase_28]
+/* 6.27 */    func normalizesCrlfAndBareCr(): Unit {
+/* 6.28 */        expectEqual("normalizeLineEndings(\"a\\r\\nb\\rc\\nd\")", "\"a\\nb\\nc\\nd\"", normalizeLineEndings("a\r\nb\rc\nd"), "a\nb\nc\nd", isDelta: false)
+/* 6.29 */    }
+/* 6.30 */    
+/* 6.31 */    @Attribute[TestCase_29]
+/* 6.32 */    func lastNonEmptyLineSkipsTrailingBlanks(): Unit {
+/* 6.33 */        expectEqual("lastNonEmptyLine(\"output\\nRouter#\\n\\n   \\n\")", "\"Router#\"", lastNonEmptyLine("output\nRouter#\n\n   \n"), "Router#", isDelta: false)
+/* 6.34 */    }
+/* 6.35 */    
+/* 6.36 */    @Attribute[TestCase_30]
+/* 6.37 */    func lastNonEmptyLineOfEmptyIsEmpty(): Unit {
+/* 6.38 */        expectEqual("lastNonEmptyLine(\"\\n\\n   \\n\")", "\"\"", lastNonEmptyLine("\n\n   \n"), "", isDelta: false)
+/* 6.39 */    }
+/* 6.40 */    
+/* 6.41 */    @Attribute[TestCase_31]
+/* 6.42 */    func promptStemDropsTerminator(): Unit {
+/* 6.43 */        expectEqual("promptStem(\"Router#\")", "\"Router\"", promptStem("Router#"), "Router", isDelta: false)
+/* 6.44 */        expectEqual("promptStem(\"Router>\")", "\"Router\"", promptStem("Router>"), "Router", isDelta: false)
+/* 6.45 */        expectEqual("promptStem(\"Router(config)#\")", "\"Router(config)\"", promptStem("Router(config)#"), "Router(config)", isDelta: false)
+/* 6.46 */        expectEqual("promptStem(\"netadmin@host:~$ \")", "\"netadmin@host:~\"", promptStem("netadmin@host:~$ "), "netadmin@host:~", isDelta: false)
+/* 6.47 */    }
+/* 6.48 */    
+/* 6.49 */    @Attribute[TestCase_32]
+/* 6.50 */    func promptBaseDropsModeSuffix(): Unit {
+/* 6.51 */        expectEqual("promptBase(\"Router(config)\")", "\"Router\"", promptBase("Router(config)"), "Router", isDelta: false)
+/* 6.52 */        expectEqual("promptBase(\"Router(config-if)\")", "\"Router\"", promptBase("Router(config-if)"), "Router", isDelta: false)
+/* 6.53 */        expectEqual("promptBase(\"Router\")", "\"Router\"", promptBase("Router"), "Router", isDelta: false)
+/* 6.54 */    }
+/* 6.55 */    
+/* 6.56 */    @Attribute[TestCase_33]
+/* 6.57 */    func recognisesPromptAcrossModeChanges(): Unit {
+/* 6.58 */        let stem = promptStem("Router>")
+/* 6.59 */        expectEqual("looksLikePrompt(\"Router>\", stem)", "true", looksLikePrompt("Router>", stem), true, isDelta: false)
+/* 6.60 */        expectEqual("looksLikePrompt(\"Router#\", stem)", "true", looksLikePrompt("Router#", stem), true, isDelta: false)
+/* 6.61 */        expectEqual("looksLikePrompt(\"Router(config)#\", stem)", "true", looksLikePrompt("Router(config)#", stem), true, isDelta: false)
+/* 6.62 */        expectEqual("looksLikePrompt(\"Router(config-if)#\", stem)", "true", looksLikePrompt("Router(config-if)#", stem), true, isDelta: false)
+/* 6.63 */    }
+/* 6.64 */    
+/* 6.65 */    @Attribute[TestCase_34]
+/* 6.66 */    func rejectsNonPromptLines(): Unit {
+/* 6.67 */        let stem = promptStem("Router#")
+/* 6.68 */        expectEqual("looksLikePrompt(\"Building configuration...\", stem)", "false", looksLikePrompt("Building configuration...", stem), false, isDelta: false)
+/* 6.69 */        expectEqual("looksLikePrompt(\"\", stem)", "false", looksLikePrompt("", stem), false, isDelta: false)
+/* 6.70 */        expectEqual("looksLikePrompt(\"   \", stem)", "false", looksLikePrompt("   ", stem), false, isDelta: false)
+/* 6.71 */        expectEqual("looksLikePrompt(\"Switch#\", stem)", "false", looksLikePrompt("Switch#", stem), false, isDelta: false)
+/* 6.72 */    }
+/* 6.73 */    
+/* 6.74 */    @Attribute[TestCase_35]
+/* 6.75 */    func endsWithPromptOnlyAtTheEnd(): Unit {
+/* 6.76 */        let stem = promptStem("Router#")
+/* 6.77 */        expectEqual("endsWithPrompt(\"show version\\nIOS 15.2\\nRouter#\", stem)", "true", endsWithPrompt("show version\nIOS 15.2\nRouter#", stem), true, isDelta: false)
+/* 6.78 */        expectEqual("endsWithPrompt(\"show version\\nIOS 15.2\\nRouter#\\r\\n\", stem)", "true", endsWithPrompt("show version\nIOS 15.2\nRouter#\r\n", stem), true, isDelta: false)
+/* 6.79 */        expectEqual("endsWithPrompt(\"Router#\\nstill sending output\", stem)", "false", endsWithPrompt("Router#\nstill sending output", stem), false, isDelta: false)
+/* 6.80 */        expectEqual("endsWithPrompt(\"\", stem)", "false", endsWithPrompt("", stem), false, isDelta: false)
+/* 6.81 */    }
+/* 6.82 */    
+/* 6.83 */    @Attribute[TestCase_36]
+/* 6.84 */    func extractsOutputBetweenEchoAndPrompt(): Unit {
+/* 6.85 */        let raw = "show version\r\nCisco IOS Software\r\nVersion 15.2\r\nRouter#"
+/* 6.86 */        let stem = promptStem("Router#")
+/* 6.87 */        expectEqual("extractCommandOutput(raw, \"show version\", stem)", "\"Cisco IOS Software\\nVersion 15.2\"", extractCommandOutput(raw, "show version", stem), "Cisco IOS Software\nVersion 15.2", isDelta: false)
+/* 6.88 */    }
+/* 6.89 */    
+/* 6.90 */    @Attribute[TestCase_37]
+/* 6.91 */    func extractsOutputWhenEchoTrailsThePrompt(): Unit {
+/* 6.92 */        let raw = "Router#show version\r\nVersion 15.2\r\nRouter#"
+/* 6.93 */        let stem = promptStem("Router#")
+/* 6.94 */        expectEqual("extractCommandOutput(raw, \"show version\", stem)", "\"Version 15.2\"", extractCommandOutput(raw, "show version", stem), "Version 15.2", isDelta: false)
+/* 6.95 */    }
+/* 6.96 */    
+/* 6.97 */    @Attribute[TestCase_38]
+/* 6.98 */    func dropsPtyBlankLineAfterEcho(): Unit {
+/* 6.99 */        let raw = "echo hi\r\n\r\nhi\r\nhost:~$ "
+/* 6.100 */        let stem = promptStem("host:~$")
+/* 6.101 */        expectEqual("extractCommandOutput(raw, \"echo hi\", stem)", "\"hi\"", extractCommandOutput(raw, "echo hi", stem), "hi", isDelta: false)
+/* 6.102 */    }
+/* 6.103 */    
+/* 6.104 */    @Attribute[TestCase_39]
+/* 6.105 */    func preservesBlankLinesInsideOutput(): Unit {
+/* 6.106 */        let raw = "show run\r\n\r\nline one\r\n\r\nline two\r\nRouter#"
+/* 6.107 */        let stem = promptStem("Router#")
+/* 6.108 */        expectEqual("extractCommandOutput(raw, \"show run\", stem)", "\"line one\\n\\nline two\"", extractCommandOutput(raw, "show run", stem), "line one\n\nline two", isDelta: false)
+/* 6.109 */    }
+/* 6.110 */    
+/* 6.111 */    @Attribute[TestCase_40]
+/* 6.112 */    func extractsEmptyOutputForSilentCommand(): Unit {
+/* 6.113 */        let raw = "terminal length 0\r\nRouter#"
+/* 6.114 */        let stem = promptStem("Router#")
+/* 6.115 */        expectEqual("extractCommandOutput(raw, \"terminal length 0\", stem)", "\"\"", extractCommandOutput(raw, "terminal length 0", stem), "", isDelta: false)
+/* 6.116 */    }
+/* 6.117 */    
+/* 6.118 */    @Attribute[TestCase_41]
+/* 6.119 */    func extractStripsAnsiFromOutput(): Unit {
+/* 6.120 */        let raw = "ls\r\n\u{1b}[01;34mdocs\u{1b}[0m\r\nnetadmin@host:~$ "
+/* 6.121 */        let stem = promptStem("netadmin@host:~$")
+/* 6.122 */        expectEqual("extractCommandOutput(raw, \"ls\", stem)", "\"docs\"", extractCommandOutput(raw, "ls", stem), "docs", isDelta: false)
+/* 6.123 */    }
+/* 6.124 */    
+/* 6.125 */    @Attribute[TestCase_42]
+/* 6.126 */    func hexEncodesFingerprintBytes(): Unit {
+/* 6.127 */        expectEqual("hexOf([UInt8(0), UInt8(15), UInt8(16), UInt8(255)])", "\"000f10ff\"", hexOf([UInt8(0), UInt8(15), UInt8(16), UInt8(255)]), "000f10ff", isDelta: false)
+/* 6.128 */        expectEqual("hexOf(Array < UInt8 >())", "\"\"", hexOf(Array < UInt8 >()), "", isDelta: false)
+/* 6.129 */    }
+/* 6.130 */    
+/* 6.131 */    init() {
+/* 6.132 */    }
+/* 6.133 */    private func classConfiguration(): Configuration {
+/* 6.134 */        let configuration = Configuration()
+/* 6.135 */        
+/* 6.136 */        return configuration
+/* 6.137 */    }
+/* 6.138 */    public override func asTestSuite(): TestSuite {
+/* 6.139 */        
+/* 6.140 */        let suiteConfiguration = classConfiguration()
+/* 6.141 */        let suiteBuilder = TestSuite.builder("PromptTests").configure(suiteConfiguration)
+/* 6.142 */        
+/* 6.143 */        { => let caseConfig = Configuration()
+/* 6.144 */            
+/* 6.145 */            let stripsCsiColourCodesTestFunc = { => stripsCsiColourCodes();() }
+/* 6.146 */            suiteBuilder.add(
+/* 6.147 */            UnitTestCase.create(
+/* 6.148 */            "stripsCsiColourCodes",
+/* 6.149 */            configuration: caseConfig,
+/* 6.150 */            body: stripsCsiColourCodesTestFunc
+/* 6.151 */            )
+/* 6.152 */            )
+/* 6.153 */            
+/* 6.154 */        }()
+/* 6.155 */        
+/* 6.156 */        
+/* 6.157 */        { => let caseConfig = Configuration()
+/* 6.158 */            
+/* 6.159 */            let stripsOscTitleSequenceTestFunc = { => stripsOscTitleSequence();() }
+/* 6.160 */            suiteBuilder.add(
+/* 6.161 */            UnitTestCase.create(
+/* 6.162 */            "stripsOscTitleSequence",
+/* 6.163 */            configuration: caseConfig,
+/* 6.164 */            body: stripsOscTitleSequenceTestFunc
+/* 6.165 */            )
+/* 6.166 */            )
+/* 6.167 */            
+/* 6.168 */        }()
+/* 6.169 */        
+/* 6.170 */        
+/* 6.171 */        { => let caseConfig = Configuration()
+/* 6.172 */            
+/* 6.173 */            let stripsCursorMovesAndKeepsTextTestFunc = { => stripsCursorMovesAndKeepsText();() }
+/* 6.174 */            suiteBuilder.add(
+/* 6.175 */            UnitTestCase.create(
+/* 6.176 */            "stripsCursorMovesAndKeepsText",
+/* 6.177 */            configuration: caseConfig,
+/* 6.178 */            body: stripsCursorMovesAndKeepsTextTestFunc
+/* 6.179 */            )
+/* 6.180 */            )
+/* 6.181 */            
+/* 6.182 */        }()
+/* 6.183 */        
+/* 6.184 */        
+/* 6.185 */        { => let caseConfig = Configuration()
+/* 6.186 */            
+/* 6.187 */            let leavesPlainTextAloneTestFunc = { => leavesPlainTextAlone();() }
+/* 6.188 */            suiteBuilder.add(
+/* 6.189 */            UnitTestCase.create(
+/* 6.190 */            "leavesPlainTextAlone",
+/* 6.191 */            configuration: caseConfig,
+/* 6.192 */            body: leavesPlainTextAloneTestFunc
+/* 6.193 */            )
+/* 6.194 */            )
+/* 6.195 */            
+/* 6.196 */        }()
+/* 6.197 */        
+/* 6.198 */        
+/* 6.199 */        { => let caseConfig = Configuration()
+/* 6.200 */            
+/* 6.201 */            let normalizesCrlfAndBareCrTestFunc = { => normalizesCrlfAndBareCr();() }
+/* 6.202 */            suiteBuilder.add(
+/* 6.203 */            UnitTestCase.create(
+/* 6.204 */            "normalizesCrlfAndBareCr",
+/* 6.205 */            configuration: caseConfig,
+/* 6.206 */            body: normalizesCrlfAndBareCrTestFunc
+/* 6.207 */            )
+/* 6.208 */            )
+/* 6.209 */            
+/* 6.210 */        }()
+/* 6.211 */        
+/* 6.212 */        
+/* 6.213 */        { => let caseConfig = Configuration()
+/* 6.214 */            
+/* 6.215 */            let lastNonEmptyLineSkipsTrailingBlanksTestFunc = { => lastNonEmptyLineSkipsTrailingBlanks();() }
+/* 6.216 */            suiteBuilder.add(
+/* 6.217 */            UnitTestCase.create(
+/* 6.218 */            "lastNonEmptyLineSkipsTrailingBlanks",
+/* 6.219 */            configuration: caseConfig,
+/* 6.220 */            body: lastNonEmptyLineSkipsTrailingBlanksTestFunc
+/* 6.221 */            )
+/* 6.222 */            )
+/* 6.223 */            
+/* 6.224 */        }()
+/* 6.225 */        
+/* 6.226 */        
+/* 6.227 */        { => let caseConfig = Configuration()
+/* 6.228 */            
+/* 6.229 */            let lastNonEmptyLineOfEmptyIsEmptyTestFunc = { => lastNonEmptyLineOfEmptyIsEmpty();() }
+/* 6.230 */            suiteBuilder.add(
+/* 6.231 */            UnitTestCase.create(
+/* 6.232 */            "lastNonEmptyLineOfEmptyIsEmpty",
+/* 6.233 */            configuration: caseConfig,
+/* 6.234 */            body: lastNonEmptyLineOfEmptyIsEmptyTestFunc
+/* 6.235 */            )
+/* 6.236 */            )
+/* 6.237 */            
+/* 6.238 */        }()
+/* 6.239 */        
+/* 6.240 */        
+/* 6.241 */        { => let caseConfig = Configuration()
+/* 6.242 */            
+/* 6.243 */            let promptStemDropsTerminatorTestFunc = { => promptStemDropsTerminator();() }
+/* 6.244 */            suiteBuilder.add(
+/* 6.245 */            UnitTestCase.create(
+/* 6.246 */            "promptStemDropsTerminator",
+/* 6.247 */            configuration: caseConfig,
+/* 6.248 */            body: promptStemDropsTerminatorTestFunc
+/* 6.249 */            )
+/* 6.250 */            )
+/* 6.251 */            
+/* 6.252 */        }()
+/* 6.253 */        
+/* 6.254 */        
+/* 6.255 */        { => let caseConfig = Configuration()
+/* 6.256 */            
+/* 6.257 */            let promptBaseDropsModeSuffixTestFunc = { => promptBaseDropsModeSuffix();() }
+/* 6.258 */            suiteBuilder.add(
+/* 6.259 */            UnitTestCase.create(
+/* 6.260 */            "promptBaseDropsModeSuffix",
+/* 6.261 */            configuration: caseConfig,
+/* 6.262 */            body: promptBaseDropsModeSuffixTestFunc
+/* 6.263 */            )
+/* 6.264 */            )
+/* 6.265 */            
+/* 6.266 */        }()
+/* 6.267 */        
+/* 6.268 */        
+/* 6.269 */        { => let caseConfig = Configuration()
+/* 6.270 */            
+/* 6.271 */            let recognisesPromptAcrossModeChangesTestFunc = { => recognisesPromptAcrossModeChanges();() }
+/* 6.272 */            suiteBuilder.add(
+/* 6.273 */            UnitTestCase.create(
+/* 6.274 */            "recognisesPromptAcrossModeChanges",
+/* 6.275 */            configuration: caseConfig,
+/* 6.276 */            body: recognisesPromptAcrossModeChangesTestFunc
+/* 6.277 */            )
+/* 6.278 */            )
+/* 6.279 */            
+/* 6.280 */        }()
+/* 6.281 */        
+/* 6.282 */        
+/* 6.283 */        { => let caseConfig = Configuration()
+/* 6.284 */            
+/* 6.285 */            let rejectsNonPromptLinesTestFunc = { => rejectsNonPromptLines();() }
+/* 6.286 */            suiteBuilder.add(
+/* 6.287 */            UnitTestCase.create(
+/* 6.288 */            "rejectsNonPromptLines",
+/* 6.289 */            configuration: caseConfig,
+/* 6.290 */            body: rejectsNonPromptLinesTestFunc
+/* 6.291 */            )
+/* 6.292 */            )
+/* 6.293 */            
+/* 6.294 */        }()
+/* 6.295 */        
+/* 6.296 */        
+/* 6.297 */        { => let caseConfig = Configuration()
+/* 6.298 */            
+/* 6.299 */            let endsWithPromptOnlyAtTheEndTestFunc = { => endsWithPromptOnlyAtTheEnd();() }
+/* 6.300 */            suiteBuilder.add(
+/* 6.301 */            UnitTestCase.create(
+/* 6.302 */            "endsWithPromptOnlyAtTheEnd",
+/* 6.303 */            configuration: caseConfig,
+/* 6.304 */            body: endsWithPromptOnlyAtTheEndTestFunc
+/* 6.305 */            )
+/* 6.306 */            )
+/* 6.307 */            
+/* 6.308 */        }()
+/* 6.309 */        
+/* 6.310 */        
+/* 6.311 */        { => let caseConfig = Configuration()
+/* 6.312 */            
+/* 6.313 */            let extractsOutputBetweenEchoAndPromptTestFunc = { => extractsOutputBetweenEchoAndPrompt();() }
+/* 6.314 */            suiteBuilder.add(
+/* 6.315 */            UnitTestCase.create(
+/* 6.316 */            "extractsOutputBetweenEchoAndPrompt",
+/* 6.317 */            configuration: caseConfig,
+/* 6.318 */            body: extractsOutputBetweenEchoAndPromptTestFunc
+/* 6.319 */            )
+/* 6.320 */            )
+/* 6.321 */            
+/* 6.322 */        }()
+/* 6.323 */        
+/* 6.324 */        
+/* 6.325 */        { => let caseConfig = Configuration()
+/* 6.326 */            
+/* 6.327 */            let extractsOutputWhenEchoTrailsThePromptTestFunc = { => extractsOutputWhenEchoTrailsThePrompt();() }
+/* 6.328 */            suiteBuilder.add(
+/* 6.329 */            UnitTestCase.create(
+/* 6.330 */            "extractsOutputWhenEchoTrailsThePrompt",
+/* 6.331 */            configuration: caseConfig,
+/* 6.332 */            body: extractsOutputWhenEchoTrailsThePromptTestFunc
+/* 6.333 */            )
+/* 6.334 */            )
+/* 6.335 */            
+/* 6.336 */        }()
+/* 6.337 */        
+/* 6.338 */        
+/* 6.339 */        { => let caseConfig = Configuration()
+/* 6.340 */            
+/* 6.341 */            let dropsPtyBlankLineAfterEchoTestFunc = { => dropsPtyBlankLineAfterEcho();() }
+/* 6.342 */            suiteBuilder.add(
+/* 6.343 */            UnitTestCase.create(
+/* 6.344 */            "dropsPtyBlankLineAfterEcho",
+/* 6.345 */            configuration: caseConfig,
+/* 6.346 */            body: dropsPtyBlankLineAfterEchoTestFunc
+/* 6.347 */            )
+/* 6.348 */            )
+/* 6.349 */            
+/* 6.350 */        }()
+/* 6.351 */        
+/* 6.352 */        
+/* 6.353 */        { => let caseConfig = Configuration()
+/* 6.354 */            
+/* 6.355 */            let preservesBlankLinesInsideOutputTestFunc = { => preservesBlankLinesInsideOutput();() }
+/* 6.356 */            suiteBuilder.add(
+/* 6.357 */            UnitTestCase.create(
+/* 6.358 */            "preservesBlankLinesInsideOutput",
+/* 6.359 */            configuration: caseConfig,
+/* 6.360 */            body: preservesBlankLinesInsideOutputTestFunc
+/* 6.361 */            )
+/* 6.362 */            )
+/* 6.363 */            
+/* 6.364 */        }()
+/* 6.365 */        
+/* 6.366 */        
+/* 6.367 */        { => let caseConfig = Configuration()
+/* 6.368 */            
+/* 6.369 */            let extractsEmptyOutputForSilentCommandTestFunc = { => extractsEmptyOutputForSilentCommand();() }
+/* 6.370 */            suiteBuilder.add(
+/* 6.371 */            UnitTestCase.create(
+/* 6.372 */            "extractsEmptyOutputForSilentCommand",
+/* 6.373 */            configuration: caseConfig,
+/* 6.374 */            body: extractsEmptyOutputForSilentCommandTestFunc
+/* 6.375 */            )
+/* 6.376 */            )
+/* 6.377 */            
+/* 6.378 */        }()
+/* 6.379 */        
+/* 6.380 */        
+/* 6.381 */        { => let caseConfig = Configuration()
+/* 6.382 */            
+/* 6.383 */            let extractStripsAnsiFromOutputTestFunc = { => extractStripsAnsiFromOutput();() }
+/* 6.384 */            suiteBuilder.add(
+/* 6.385 */            UnitTestCase.create(
+/* 6.386 */            "extractStripsAnsiFromOutput",
+/* 6.387 */            configuration: caseConfig,
+/* 6.388 */            body: extractStripsAnsiFromOutputTestFunc
+/* 6.389 */            )
+/* 6.390 */            )
+/* 6.391 */            
+/* 6.392 */        }()
+/* 6.393 */        
+/* 6.394 */        
+/* 6.395 */        { => let caseConfig = Configuration()
+/* 6.396 */            
+/* 6.397 */            let hexEncodesFingerprintBytesTestFunc = { => hexEncodesFingerprintBytes();() }
+/* 6.398 */            suiteBuilder.add(
+/* 6.399 */            UnitTestCase.create(
+/* 6.400 */            "hexEncodesFingerprintBytes",
+/* 6.401 */            configuration: caseConfig,
+/* 6.402 */            body: hexEncodesFingerprintBytesTestFunc
+/* 6.403 */            )
+/* 6.404 */            )
+/* 6.405 */            
+/* 6.406 */        }()
+/* 6.407 */        
+/* 6.408 */        return suiteBuilder.build()
+/* 6.409 */    }
+/* 6.410 */    private func inheritedFromClassAnnotatedByTestTemplate < T >(): TestSuite where T <: TestClass {
+/* 6.411 */        throw Exception("Unreachable code")
+/* 6.412 */    }
+/* 6.413 */}
+/* 6.414 */
+/* 6.415 */
+/* 6.416 */interface TestPackageExtension_PromptTests {
+/* 6.417 */    func registerPromptTests(): Unit
+/* 6.418 */}
+/* 6.419 */extend TestPackage <: TestPackageExtension_PromptTests {
+/* 6.420 */    @Attribute[TEST_REGISTER]
+/* 6.421 */    public func registerPromptTests() {
+/* 6.422 */        registerSuite({ => PromptTests().asTestSuite() })
+/* 6.423 */    }
+/* 6.424 */}
+/* 6.425 */
+/* ===== End of the Emit ===== */
