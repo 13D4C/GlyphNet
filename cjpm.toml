@@ -22,5 +22,12 @@
 [ffi.c]
   ssh2 = { path = "vendor/lib" }
 
-[target.aarch64-unknown-linux-gnu.ffi.c]
-  ssh2 = { path = "vendor/lib" }
+# Windows (x86_64-w64-mingw32) cross-compilation.
+# The socket layer resolves against ws2_32 (Winsock 2), whose import library
+# ships with the SDK at third_party/mingw/lib/libws2_32.a and is already on
+# cjc's search path for this target -- no `path` is needed.
+# libssh2 is NOT listed here: no Windows build of it is vendored, so an
+# executable for this target cannot be linked yet. See "Windows support" in
+# README.md for exactly what is and is not proven.
+[target.x86_64-w64-mingw32]
+  link-option = "-lws2_32"

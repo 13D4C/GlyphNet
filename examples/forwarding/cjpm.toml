@@ -1,0 +1,12 @@
+[package]
+  cjc-version = "1.0.5"
+  name = "glyphnet_forwarding"
+  description = "GlyphNet port forwarding and multi-channel end-to-end verification."
+  version = "0.1.0"
+  output-type = "executable"
+
+[dependencies]
+  glyphnet = { path = "../.." }
+
+[ffi.c]
+  ssh2 = { path = "../../vendor/lib" }

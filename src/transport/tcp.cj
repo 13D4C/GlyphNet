@@ -2,7 +2,6 @@ package glyphnet.transport
 
 import glyphnet.ffi.*
 import glyphnet.errors.*
-import std.collection.*
 
 public class TcpTransport <: Resource {
     private var rawFd: Int32
@@ -23,6 +22,10 @@ public class TcpTransport <: Resource {
         }
     }
 
+    public static func adopt(fd: Int32, host: String, port: UInt16): TcpTransport {
+        return TcpTransport(fd, host, port)
+    }
+
     public static func connect(host: String, port: UInt16, timeoutMs: Int64): TcpTransport {
         if (host.isEmpty()) {
             throw ConnectionException("host must not be empty")
@@ -31,7 +34,7 @@ public class TcpTransport <: Resource {
             throw ConnectionException("connect timeout must be positive, got ${timeoutMs}ms")
         }
 
-        let addrs = resolve(host, port)
+        let addrs = resolveAddresses(host, port, false)
         if (addrs.isEmpty()) {
             throw ConnectionException("no addresses resolved for ${host}:${port}")
         }
@@ -103,58 +106,25 @@ public class TcpTransport <: Resource {
         return Option<(String, Int32)>.None
     }
 
-    private static func resolve(host: String, port: UInt16): Array<ResolvedAddr> {
-        let results = ArrayList<ResolvedAddr>()
-        unsafe {
-            let node = LibC.mallocCString(host)
-            let service = LibC.mallocCString(port.toString())
-            let hintsPtr = LibC.malloc<CAddrInfo>(count: 1)
-            let resPtr = LibC.malloc<CPointer<CAddrInfo>>(count: 1)
-
-            if (hintsPtr.isNull() || resPtr.isNull()) {
-                LibC.free(node)
-                LibC.free(service)
-                throw ConnectionException("out of memory resolving ${host}")
-            }
-
-            var hints = CAddrInfo()
-            hints.aiFamily = AF_UNSPEC
-            hints.aiSocktype = SOCK_STREAM
-            hints.aiProtocol = IPPROTO_TCP
-            hints.aiFlags = AI_NUMERICSERV
-            hintsPtr.write(0, hints)
-            resPtr.write(0, CPointer<CAddrInfo>())
-
-            let rc = sysGetaddrinfo(node, service, hintsPtr, resPtr)
-            let head = resPtr.read(0)
-
-            LibC.free(node)
-            LibC.free(service)
-            LibC.free(hintsPtr)
-            LibC.free(resPtr)
-
-            if (rc != 0) {
-                throw ConnectionException("cannot resolve ${host}:${port} - ${gaiMessage(rc)}")
-            }
-
-            var cur = head
-            while (!cur.isNull()) {
-                let ai = cur.read(0)
-                if (!ai.aiAddr.isNull() && ai.aiAddrlen > 0) {
-                    let n = Int64(ai.aiAddrlen)
-                    let copy = LibC.malloc<UInt8>(count: n)
-                    if (!copy.isNull()) {
-                        for (i in 0..n) {
-                            copy.write(i, ai.aiAddr.read(i))
-                        }
-                        results.add(ResolvedAddr(ai.aiFamily, copy, ai.aiAddrlen))
-                    }
-                }
-                cur = ai.aiNext
-            }
-            sysFreeaddrinfo(head)
+    public func readSome(buf: Array<UInt8>): Int64 {
+        if (closed) {
+            return 0
         }
-        return results.toArray()
+        return sysRead(rawFd, buf)
+    }
+
+    public func writeSome(data: Array<UInt8>): Int64 {
+        if (closed) {
+            return -1
+        }
+        return sysWrite(rawFd, data)
+    }
+
+    public func shutdownWrite(): Unit {
+        if (closed) {
+            return
+        }
+        sysShutdown(rawFd, SHUT_WR)
     }
 
     public func waitReadable(timeoutMs: Int64): Bool {
@@ -186,29 +156,5 @@ public class TcpTransport <: Resource {
         sysShutdown(rawFd, SHUT_RDWR)
         sysClose(rawFd)
         rawFd = -1
-    }
-}
-
-class ResolvedAddr {
-    let family: Int32
-    var sockaddr: CPointer<UInt8>
-    let sockaddrLen: UInt32
-    private var released: Bool = false
-
-    init(family: Int32, sockaddr: CPointer<UInt8>, sockaddrLen: UInt32) {
-        this.family = family
-        this.sockaddr = sockaddr
-        this.sockaddrLen = sockaddrLen
-    }
-
-    func release(): Unit {
-        if (released) {
-            return
-        }
-        released = true
-        if (!sockaddr.isNull()) {
-            unsafe { LibC.free(sockaddr) }
-            sockaddr = CPointer<UInt8>()
-        }
     }
 }

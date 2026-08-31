@@ -42,6 +42,18 @@ public class ConnectionOptions {
 
     public var pagingCommand: String = ""
 
+    public var deviceType: DeviceType = DeviceType.Generic
+
+    public var autoDetectDeviceType: Bool = false
+
+    public var enablePassword: String = ""
+
+    public var maxRetries: Int64 = 0
+
+    public var retryBackoffMs: Int64 = 1000
+
+    public var retryMaxBackoffMs: Int64 = 30000
+
     public var hostKeyPolicy: HostKeyPolicy = HostKeyPolicy.AcceptAny
 
     public var keepaliveSec: UInt32 = 0
@@ -56,23 +68,105 @@ public class ConnectionOptions {
     }
 }
 
-public class SSHConnection <: Resource {
-    private let session: Session
-    private let channel: Channel
-    private let options: ConnectionOptions
-    private var basePrompt: String = ""
-    private var promptStemValue: String = ""
-    private var closed: Bool = false
+public class ExecResult {
+    public let output: String
+    public let exitStatus: Int32
 
-    private init(session: Session, channel: Channel, options: ConnectionOptions) {
+    init(output: String, exitStatus: Int32) {
+        this.output = output
+        this.exitStatus = exitStatus
+    }
+
+    public prop succeeded: Bool {
+        get() {
+            exitStatus == 0
+        }
+    }
+
+    public func toString(): String {
+        return "ExecResult(exitStatus=${exitStatus}, ${output.size} bytes)"
+    }
+}
+
+class ShellHandles {
+    let session: Session
+    let channel: Channel
+
+    init(session: Session, channel: Channel) {
         this.session = session
         this.channel = channel
+    }
+}
+
+class ChannelStream <: CliStream {
+    private let channel: Channel
+
+    init(channel: Channel) {
+        this.channel = channel
+    }
+
+    public func writeAll(data: String, timeoutMs: Int64): Unit {
+        channel.writeAll(data, timeoutMs)
+    }
+
+    public func readAvailable(): String {
+        return channel.readAvailable()
+    }
+
+    public func readUntil(predicate: (String) -> Bool, timeoutMs: Int64, quietMs: Int64): String {
+        return channel.readUntil(predicate, timeoutMs, quietMs)
+    }
+
+    public func isEof(): Bool {
+        return channel.isEof()
+    }
+
+    public func closeStream(): Unit {
+        channel.close()
+    }
+}
+
+public class SSHConnection <: Resource & NetworkConnection {
+    private var session: Session
+    private var channel: Channel
+    private let options: ConnectionOptions
+    private var driver: CliDriver
+
+    private init(handles: ShellHandles, options: ConnectionOptions) {
+        this.session = handles.session
+        this.channel = handles.channel
         this.options = options
+        this.driver = SSHConnection.makeDriver(handles.channel, options)
+    }
+
+    private static func makeDriver(channel: Channel, options: ConnectionOptions): CliDriver {
+        return CliDriver(ChannelStream(channel), options.host, options.deviceType,
+                         options.pagingCommand, options.enablePassword,
+                         options.autoDetectDeviceType, options.commandTimeoutMs,
+                         options.quietPeriodMs, options.bannerSettleMs)
     }
 
     public prop prompt: String {
         get() {
-            basePrompt
+            driver.prompt
+        }
+    }
+
+    public prop deviceType: DeviceType {
+        get() {
+            driver.deviceType
+        }
+    }
+
+    public prop devicePreset: DeviceProfile {
+        get() {
+            driver.devicePreset
+        }
+    }
+
+    public prop pagingCommand: String {
+        get() {
+            driver.pagingCommand
         }
     }
 
@@ -91,7 +185,22 @@ public class SSHConnection <: Resource {
 
     public static func connect(options: ConnectionOptions): SSHConnection {
         validate(options)
+        return retrying<SSHConnection>(options, {=> connectOnce(options)})
+    }
 
+    private static func connectOnce(options: ConnectionOptions): SSHConnection {
+        let handles = openShell(options)
+        let conn = SSHConnection(handles, options)
+        try {
+            conn.driver.establish()
+        } catch (e: Exception) {
+            conn.close()
+            throw e
+        }
+        return conn
+    }
+
+    private static func openShell(options: ConnectionOptions): ShellHandles {
         let transport = TcpTransport.connect(options.host, options.port, options.connectTimeoutMs)
 
         let session = Session.handshake(transport, options.authTimeoutMs)
@@ -111,12 +220,47 @@ public class SSHConnection <: Resource {
             }
             channel.mergeStderr()
             channel.startShell()
-
-            let conn = SSHConnection(session, channel, options)
-            conn.establish()
-            return conn
+            return ShellHandles(session, channel)
         } catch (e: Exception) {
             session.close()
+            throw e
+        }
+    }
+
+    private static func retrying<T>(options: ConnectionOptions, body: () -> T): T {
+        var attempt: Int64 = 0
+        while (true) {
+            try {
+                return body()
+            } catch (e: AuthenticationException) {
+                throw e
+            } catch (e: HostKeyException) {
+                throw e
+            } catch (e: GlyphNetException) {
+                if (attempt >= options.maxRetries) {
+                    throw e
+                }
+                let delay = retryDelayMs(attempt, options.retryBackoffMs, options.retryMaxBackoffMs)
+                if (delay > 0) {
+                    sleep(Duration.millisecond * delay)
+                }
+                attempt += 1
+            }
+        }
+        throw ConnectionException("retry loop for ${options.host} exited unexpectedly")
+    }
+
+    public func reconnect(): Unit {
+        close()
+        let handles = SSHConnection.retrying<ShellHandles>(options,
+                                                           {=> SSHConnection.openShell(options)})
+        session = handles.session
+        channel = handles.channel
+        driver = SSHConnection.makeDriver(handles.channel, options)
+        try {
+            driver.establish()
+        } catch (e: Exception) {
+            close()
             throw e
         }
     }
@@ -136,6 +280,9 @@ public class SSHConnection <: Resource {
         }
         if (options.commandTimeoutMs <= 0) {
             throw ConnectionException("commandTimeoutMs must be positive")
+        }
+        if (options.maxRetries < 0) {
+            throw ConnectionException("maxRetries must not be negative, got ${options.maxRetries}")
         }
     }
 
@@ -174,89 +321,134 @@ public class SSHConnection <: Resource {
         }
     }
 
-    private func establish(): Unit {
-        channel.readUntil({_ => false}, options.bannerSettleMs, options.quietPeriodMs)
-        findPrompt()
-        if (!options.pagingCommand.isEmpty()) {
-            sendCommand(options.pagingCommand)
-        }
+    public func redispatch(deviceType: DeviceType): Unit {
+        driver.redispatch(deviceType)
+    }
+
+    public func detectDeviceType(): DeviceType {
+        return driver.detectDeviceType()
+    }
+
+    public func isEnableMode(): Bool {
+        return driver.isEnableMode()
+    }
+
+    public func isConfigMode(): Bool {
+        return driver.isConfigMode()
+    }
+
+    public func enable(): Unit {
+        driver.enable()
+    }
+
+    public func enable(password: String): Unit {
+        driver.enable(password)
+    }
+
+    public func configMode(): String {
+        return driver.configMode()
+    }
+
+    public func exitConfigMode(): String {
+        return driver.exitConfigMode()
+    }
+
+    public func sendConfig(commands: Array<String>): Array<String> {
+        return driver.sendConfig(commands)
     }
 
     public func findPrompt(): String {
-        checkOpen()
-
-        channel.readAvailable()
-        channel.writeAll("\n", options.commandTimeoutMs)
-
-        let raw = channel.readUntil({text => endsWithPrompt(text, "")}, options.commandTimeoutMs,
-                                    options.quietPeriodMs)
-        let line = lastNonEmptyLine(cleanOutput(raw))
-        if (line.isEmpty()) {
-            throw SshTimeoutException("could not determine the device prompt (no output received)")
-        }
-        basePrompt = line
-        promptStemValue = promptStem(line)
-        return basePrompt
+        return driver.findPrompt()
     }
 
     public func sendCommand(command: String): String {
-        return sendCommand(command, options.commandTimeoutMs)
+        return driver.sendCommand(command)
     }
 
     public func sendCommand(command: String, timeoutMs: Int64): String {
-        checkOpen()
-        if (timeoutMs <= 0) {
-            throw CommandException("command timeout must be positive, got ${timeoutMs}ms")
-        }
-        channel.writeAll(command + "\n", timeoutMs)
-
-        let stem = promptStemValue
-        let raw = channel.readUntil({text => endsWithPrompt(text, stem)}, timeoutMs,
-                                    options.quietPeriodMs)
-        return extractCommandOutput(raw, command, stem)
+        return driver.sendCommand(command, timeoutMs)
     }
 
     public func sendCommandTiming(command: String, timeoutMs: Int64, quietMs: Int64): String {
-        checkOpen()
-        channel.writeAll(command + "\n", timeoutMs)
-        let raw = channel.readUntil({_ => false}, timeoutMs, quietMs)
-        return extractCommandOutput(raw, command, promptStemValue)
+        return driver.sendCommandTiming(command, timeoutMs, quietMs)
     }
 
-    public func sendCommands(commands: Array<String>): Array<String> {
-        checkOpen()
-        let results = ArrayList<String>()
+    public func sendCommandParsed(command: String, template: String): Array<TextFsmRow> {
+        return TextFsmTemplate.compile(template).parse(sendCommand(command))
+    }
+
+    public func sendCommandParsed(command: String, template: String,
+                                  timeoutMs: Int64): Array<TextFsmRow> {
+        return TextFsmTemplate.compile(template).parse(sendCommand(command, timeoutMs))
+    }
+
+    public func sendCommandParsed(command: String, template: TextFsmTemplate): Array<TextFsmRow> {
+        return template.parse(sendCommand(command))
+    }
+
+    public func execChannel(command: String): ExecResult {
+        return execChannel(command, options.commandTimeoutMs)
+    }
+
+    public func execChannel(command: String, timeoutMs: Int64): ExecResult {
+        driver.checkOpen()
+        if (command.isEmpty()) {
+            throw CommandException("exec command must not be empty")
+        }
+        if (timeoutMs <= 0) {
+            throw CommandException("exec timeout must be positive, got ${timeoutMs}ms")
+        }
+        let ch = session.openChannel()
+        try {
+            ch.mergeStderr()
+            ch.exec(command)
+            let raw = ch.readToEof(timeoutMs)
+            let status = ch.waitForExit(timeoutMs)
+            return ExecResult(cleanOutput(raw), status)
+        } finally {
+            try {
+                ch.close()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    public func execChannels(commands: Array<String>): Array<ExecResult> {
+        driver.checkOpen()
+        let results = ArrayList<ExecResult>()
         for (c in commands) {
-            results.add(sendCommand(c))
+            results.add(execChannel(c))
         }
         return results.toArray()
     }
 
+    func rawSession(): Session {
+        driver.checkOpen()
+        return session
+    }
+
+    func transferTimeoutMs(): Int64 {
+        return options.commandTimeoutMs
+    }
+
+    public func sendCommands(commands: Array<String>): Array<String> {
+        return driver.sendCommands(commands)
+    }
+
     public func writeRaw(text: String): Unit {
-        checkOpen()
-        channel.writeAll(text, options.commandTimeoutMs)
+        driver.writeRaw(text)
     }
 
     public func readAvailable(): String {
-        checkOpen()
-        return cleanOutput(channel.readAvailable())
+        return driver.readAvailable()
     }
 
     public func isAlive(): Bool {
-        if (closed) {
-            return false
-        }
-        return !channel.isEof()
-    }
-
-    private func checkOpen(): Unit {
-        if (closed) {
-            throw CommandException("connection to ${options.host} is already closed")
-        }
+        return driver.isAlive()
     }
 
     public func isClosed(): Bool {
-        return closed
+        return driver.isClosed()
     }
 
     public func disconnect(): Unit {
@@ -264,10 +456,10 @@ public class SSHConnection <: Resource {
     }
 
     public func close(): Unit {
-        if (closed) {
+        if (driver.isClosed()) {
             return
         }
-        closed = true
+        driver.markClosed()
         try {
             channel.close()
         } catch (_: Exception) {

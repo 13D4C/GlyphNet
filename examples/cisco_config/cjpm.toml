@@ -1,0 +1,12 @@
+[package]
+  cjc-version = "1.0.5"
+  name = "cisco_config"
+  description = "GlyphNet example: discover interfaces on a Cisco IOS device, then set an interface description via config mode."
+  version = "0.1.0"
+  output-type = "executable"
+
+[dependencies]
+  glyphnet = { path = "../.." }
+
+[ffi.c]
+  ssh2 = { path = "../../vendor/lib" }

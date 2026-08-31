@@ -8,6 +8,21 @@ const READ_BUFFER_SIZE = 32768
 
 const POLL_SLICE_MS: Int64 = 50
 
+public func sessionPollEvents(session: Session): Int16 {
+    let dir = session.blockDirections()
+    var events: Int16 = 0
+    if ((dir & LIBSSH2_SESSION_BLOCK_INBOUND) != 0) {
+        events |= POLLIN
+    }
+    if ((dir & LIBSSH2_SESSION_BLOCK_OUTBOUND) != 0) {
+        events |= POLLOUT
+    }
+    if (events == 0) {
+        events = POLLIN
+    }
+    return events
+}
+
 public class Channel <: Resource {
     private var handle: CPointer<Unit>
     private let session: Session
@@ -21,53 +36,63 @@ public class Channel <: Resource {
     }
 
     public func requestPty(term: String, width: Int32, height: Int32): Unit {
-        checkOpen()
-        if (started) {
-            throw SshException("PTY must be requested before the shell or command is started")
+        session.withLock {
+            checkOpen()
+            if (started) {
+                throw SshException("PTY must be requested before the shell or command is started")
+            }
+            session.setBlocking(true)
+            let rc = ssh2ChannelRequestPty(handle, term, width, height)
+            if (rc != 0) {
+                let err = session.lastError()
+                throw SshException("PTY request ('${term}') was denied", rc, err[1])
+            }
+            ptyRequested = true
         }
-        session.setBlocking(true)
-        let rc = ssh2ChannelRequestPty(handle, term, width, height)
-        if (rc != 0) {
-            let err = session.lastError()
-            throw SshException("PTY request ('${term}') was denied", rc, err[1])
-        }
-        ptyRequested = true
     }
 
     public func startShell(): Unit {
-        checkOpen()
-        session.setBlocking(true)
-        let rc = ssh2ChannelProcessStartup(handle, "shell", "")
-        if (rc != 0) {
-            let err = session.lastError()
-            throw SshException("failed to start remote shell", rc, err[1])
+        session.withLock {
+            checkOpen()
+            session.setBlocking(true)
+            let rc = ssh2ChannelProcessStartup(handle, "shell", "")
+            if (rc != 0) {
+                let err = session.lastError()
+                throw SshException("failed to start remote shell", rc, err[1])
+            }
+            started = true
         }
-        started = true
     }
 
     public func exec(command: String): Unit {
-        checkOpen()
-        session.setBlocking(true)
-        let rc = ssh2ChannelProcessStartup(handle, "exec", command)
-        if (rc != 0) {
-            let err = session.lastError()
-            throw SshException("failed to exec '${command}'", rc, err[1])
+        session.withLock {
+            checkOpen()
+            session.setBlocking(true)
+            let rc = ssh2ChannelProcessStartup(handle, "exec", command)
+            if (rc != 0) {
+                let err = session.lastError()
+                throw SshException("failed to exec '${command}'", rc, err[1])
+            }
+            started = true
         }
-        started = true
     }
 
     public func mergeStderr(): Unit {
-        checkOpen()
-        ssh2ChannelHandleExtendedData(handle, LIBSSH2_CHANNEL_EXTENDED_DATA_MERGE)
+        session.withLock {
+            checkOpen()
+            ssh2ChannelHandleExtendedData(handle, LIBSSH2_CHANNEL_EXTENDED_DATA_MERGE)
+        }
     }
 
     public func writeAll(data: String, timeoutMs: Int64): Unit {
+        writeAll(data.toArray(), timeoutMs)
+    }
+
+    public func writeAll(bytes: Array<UInt8>, timeoutMs: Int64): Unit {
         checkOpen()
-        let bytes = data.toArray()
         if (bytes.size == 0) {
             return
         }
-        session.setBlocking(false)
         let deadline = MonoTime.now() + Duration.millisecond * timeoutMs
         var offset = 0
         while (offset < bytes.size) {
@@ -76,7 +101,11 @@ public class Channel <: Resource {
             } else {
                 bytes[offset..bytes.size]
             }
-            let n = ssh2ChannelWrite(handle, 0, chunk)
+            let n = session.withLock {
+                checkOpen()
+                session.setBlocking(false)
+                return ssh2ChannelWrite(handle, 0, chunk)
+            }
             if (n > 0) {
                 offset += Int64(n)
                 continue
@@ -94,32 +123,50 @@ public class Channel <: Resource {
         }
     }
 
-    public func readAvailable(): String {
-        checkOpen()
-        session.setBlocking(false)
-        let sb = StringBuilder()
-        let buf = Array<UInt8>(READ_BUFFER_SIZE, repeat: 0)
-        while (true) {
-            let n = ssh2ChannelRead(handle, 0, buf)
-            if (n > 0) {
-                sb.append(String.fromUtf8(buf[0..Int64(n)]))
-                continue
-            }
-            if (n == 0 || Int32(n) == LIBSSH2_ERROR_EAGAIN) {
-                break
-            }
-            if (Int32(n) == LIBSSH2_ERROR_CHANNEL_CLOSED || Int32(n) == LIBSSH2_ERROR_SOCKET_DISCONNECT) {
-                break
-            }
-            let err = session.lastError()
-            throw SshException("channel read failed", Int32(n), err[1])
+    public func writeSome(data: Array<UInt8>): Int64 {
+        return session.withLock {
+            checkOpen()
+            session.setBlocking(false)
+            return ssh2ChannelWrite(handle, 0, data)
         }
-        return sb.toString()
+    }
+
+    public func readSome(buf: Array<UInt8>): Int64 {
+        return session.withLock {
+            checkOpen()
+            session.setBlocking(false)
+            return ssh2ChannelRead(handle, 0, buf)
+        }
+    }
+
+    public func readAvailable(): String {
+        return session.withLock {
+            checkOpen()
+            session.setBlocking(false)
+            let sb = StringBuilder()
+            let buf = Array<UInt8>(READ_BUFFER_SIZE, repeat: 0)
+            while (true) {
+                let n = ssh2ChannelRead(handle, 0, buf)
+                if (n > 0) {
+                    sb.append(String.fromUtf8(buf[0..Int64(n)]))
+                    continue
+                }
+                if (n == 0 || Int32(n) == LIBSSH2_ERROR_EAGAIN) {
+                    break
+                }
+                if (Int32(n) == LIBSSH2_ERROR_CHANNEL_CLOSED ||
+                    Int32(n) == LIBSSH2_ERROR_SOCKET_DISCONNECT) {
+                    break
+                }
+                let err = session.lastError()
+                throw SshException("channel read failed", Int32(n), err[1])
+            }
+            return sb.toString()
+        }
     }
 
     public func readUntil(predicate: (String) -> Bool, timeoutMs: Int64, quietMs: Int64): String {
         checkOpen()
-        session.setBlocking(false)
 
         let sb = StringBuilder()
         let buf = Array<UInt8>(READ_BUFFER_SIZE, repeat: 0)
@@ -129,44 +176,53 @@ public class Channel <: Resource {
         var sawAnyData = false
 
         while (true) {
-            var progressed = false
-            var atEof = false
-
-            while (true) {
-                let n = ssh2ChannelRead(handle, 0, buf)
-                if (n > 0) {
-                    sb.append(String.fromUtf8(buf[0..Int64(n)]))
-                    progressed = true
-                    sawAnyData = true
-                    continue
-                }
-                if (Int32(n) == LIBSSH2_ERROR_EAGAIN) {
-                    break
-                }
-                if (n == 0) {
-                    if (ssh2ChannelEof(handle) == 1) {
-                        atEof = true
+            let drained = session.withLock {
+                checkOpen()
+                session.setBlocking(false)
+                var got = false
+                var eof = false
+                while (true) {
+                    let n = ssh2ChannelRead(handle, 0, buf)
+                    if (n > 0) {
+                        sb.append(String.fromUtf8(buf[0..Int64(n)]))
+                        got = true
+                        continue
                     }
-                    break
+                    if (Int32(n) == LIBSSH2_ERROR_EAGAIN) {
+                        break
+                    }
+                    if (n == 0) {
+                        if (ssh2ChannelEof(handle) == 1) {
+                            eof = true
+                        }
+                        break
+                    }
+                    if (Int32(n) == LIBSSH2_ERROR_CHANNEL_CLOSED ||
+                        Int32(n) == LIBSSH2_ERROR_SOCKET_DISCONNECT) {
+                        eof = true
+                        break
+                    }
+                    let err = ssh2SessionLastError(session.raw)
+                    throw SshException("channel read failed", Int32(n), err[1])
                 }
-                if (Int32(n) == LIBSSH2_ERROR_CHANNEL_CLOSED ||
-                    Int32(n) == LIBSSH2_ERROR_SOCKET_DISCONNECT) {
-                    atEof = true
-                    break
+                if (!eof && ssh2ChannelEof(handle) == 1) {
+                    eof = true
                 }
-                let err = session.lastError()
-                throw SshException("channel read failed", Int32(n), err[1])
+                return (got, eof)
             }
+            let progressed = drained[0]
+            let atEof = drained[1]
 
             if (progressed) {
                 lastData = MonoTime.now()
+                sawAnyData = true
             }
 
             let text = sb.toString()
             if (predicate(text)) {
                 return text
             }
-            if (atEof || ssh2ChannelEof(handle) == 1) {
+            if (atEof) {
                 return text
             }
             if (MonoTime.now() >= deadline) {
@@ -190,37 +246,84 @@ public class Channel <: Resource {
         return readUntil({_ => false}, timeoutMs, 0)
     }
 
-    public func isEof(): Bool {
-        if (closed) {
-            return true
+    public func readChunk(buf: Array<UInt8>, timeoutMs: Int64): Int64 {
+        checkOpen()
+        if (buf.size == 0) {
+            return 0
         }
-        return ssh2ChannelEof(handle) == 1
+        let deadline = MonoTime.now() + Duration.millisecond * timeoutMs
+        while (true) {
+            let result = session.withLock {
+                checkOpen()
+                session.setBlocking(false)
+                let got = ssh2ChannelRead(handle, 0, buf)
+                return (got, ssh2ChannelEof(handle) == 1)
+            }
+            let n = result[0]
+            if (n > 0) {
+                return n
+            }
+            if (result[1]) {
+                return 0
+            }
+            if (n == 0 || Int32(n) == LIBSSH2_ERROR_EAGAIN) {
+                if (MonoTime.now() >= deadline) {
+                    throw SshTimeoutException(
+                        "timed out after ${timeoutMs}ms waiting for channel data")
+                }
+                waitForSocket(POLL_SLICE_MS)
+                continue
+            }
+            if (Int32(n) == LIBSSH2_ERROR_CHANNEL_CLOSED ||
+                Int32(n) == LIBSSH2_ERROR_SOCKET_DISCONNECT) {
+                return 0
+            }
+            let err = session.lastError()
+            throw SshException("channel read failed", Int32(n), err[1])
+        }
+        return 0
+    }
+
+    public func isEof(): Bool {
+        return session.withLock {
+            if (closed) {
+                return true
+            }
+            return ssh2ChannelEof(handle) == 1
+        }
     }
 
     public func exitStatus(): Int32 {
-        checkOpen()
-        return ssh2ChannelExitStatus(handle)
+        return session.withLock {
+            checkOpen()
+            return ssh2ChannelExitStatus(handle)
+        }
+    }
+
+    public func waitForExit(timeoutMs: Int64): Int32 {
+        return session.withLock {
+            checkOpen()
+            let previousTimeout = ssh2SessionGetTimeout(session.raw)
+            ssh2SessionSetBlocking(session.raw, true)
+            ssh2SessionSetTimeout(session.raw, timeoutMs)
+            ssh2ChannelClose(handle)
+            ssh2ChannelWaitClosed(handle)
+            let status = ssh2ChannelExitStatus(handle)
+            ssh2SessionSetTimeout(session.raw, previousTimeout)
+            return status
+        }
     }
 
     public func sendEof(): Unit {
-        checkOpen()
-        session.setBlocking(true)
-        ssh2ChannelSendEof(handle)
+        session.withLock {
+            checkOpen()
+            session.setBlocking(true)
+            ssh2ChannelSendEof(handle)
+        }
     }
 
     private func waitForSocket(sliceMs: Int64): Unit {
-        let dir = session.blockDirections()
-        var events: Int16 = 0
-        if ((dir & LIBSSH2_SESSION_BLOCK_INBOUND) != 0) {
-            events |= POLLIN
-        }
-        if ((dir & LIBSSH2_SESSION_BLOCK_OUTBOUND) != 0) {
-            events |= POLLOUT
-        }
-        if (events == 0) {
-            events = POLLIN
-        }
-        pollOne(session.socket.fd, events, Int32(sliceMs))
+        pollOne(session.socket.fd, sessionPollEvents(session), Int32(sliceMs))
     }
 
     private func checkOpen(): Unit {
@@ -234,21 +337,23 @@ public class Channel <: Resource {
     }
 
     public func close(): Unit {
-        if (closed) {
-            return
-        }
-        closed = true
-        if (!handle.isNull()) {
-            if (!session.isClosed()) {
-                ssh2SessionSetBlocking(session.raw, true)
-                ssh2SessionSetTimeout(session.raw, 2000)
+        session.withLock {
+            if (closed) {
+                return
             }
-            ssh2ChannelClose(handle)
-            ssh2ChannelFree(handle)
-            handle = CPointer<Unit>()
-        }
-        if (!session.isClosed()) {
-            session.forgetChannel(this)
+            closed = true
+            if (!handle.isNull()) {
+                if (!session.isClosed()) {
+                    ssh2SessionSetBlocking(session.raw, true)
+                    ssh2SessionSetTimeout(session.raw, 2000)
+                }
+                ssh2ChannelClose(handle)
+                ssh2ChannelFree(handle)
+                handle = CPointer<Unit>()
+            }
+            if (!session.isClosed()) {
+                session.forgetChannel(this)
+            }
         }
     }
 }

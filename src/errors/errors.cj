@@ -62,6 +62,18 @@ public class CommandException <: GlyphNetException {
     }
 }
 
+public class TemplateException <: GlyphNetException {
+    public init(message: String) {
+        super(message)
+    }
+}
+
+public class ParseException <: GlyphNetException {
+    public init(message: String) {
+        super(message)
+    }
+}
+
 func formatMessage(message: String, code: Int32, detail: String): String {
     if (code == 0 && detail.isEmpty()) {
         return message

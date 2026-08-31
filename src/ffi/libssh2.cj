@@ -135,8 +135,19 @@ foreign func libssh2_channel_free(channel: CPointer<Unit>): Int32
 foreign func libssh2_channel_get_exit_status(channel: CPointer<Unit>): Int32
 foreign func libssh2_channel_set_blocking(channel: CPointer<Unit>, blocking: Int32): Unit
 foreign func libssh2_channel_handle_extended_data2(channel: CPointer<Unit>, mode: Int32): Int32
+foreign func libssh2_channel_direct_tcpip_ex(session: CPointer<Unit>, host: CString, port: Int32,
+                                             shost: CString, sport: Int32): CPointer<Unit>
+foreign func libssh2_channel_forward_listen_ex(session: CPointer<Unit>, host: CString, port: Int32,
+                                               boundPort: CPointer<Int32>,
+                                               queueMaxsize: Int32): CPointer<Unit>
+foreign func libssh2_channel_forward_accept(listener: CPointer<Unit>): CPointer<Unit>
+foreign func libssh2_channel_forward_cancel(listener: CPointer<Unit>): Int32
 foreign func libssh2_keepalive_config(session: CPointer<Unit>, wantReply: Int32,
                                       interval: UInt32): Unit
+foreign func libssh2_scp_send64(session: CPointer<Unit>, path: CString, mode: Int32, size: Int64,
+                                mtime: Int64, atime: Int64): CPointer<Unit>
+foreign func libssh2_scp_recv2(session: CPointer<Unit>, path: CString,
+                               sb: CPointer<UInt8>): CPointer<Unit>
 
 public func ssh2Init(): Int32 {
     unsafe { return libssh2_init(0) }
@@ -182,6 +193,10 @@ public func ssh2SessionSetBlocking(session: CPointer<Unit>, blocking: Bool): Uni
 
 public func ssh2SessionSetTimeout(session: CPointer<Unit>, timeoutMs: Int64): Unit {
     unsafe { libssh2_session_set_timeout(session, timeoutMs) }
+}
+
+public func ssh2SessionGetTimeout(session: CPointer<Unit>): Int64 {
+    unsafe { return libssh2_session_get_timeout(session) }
 }
 
 public func ssh2SessionBlockDirections(session: CPointer<Unit>): Int32 {
@@ -407,8 +422,102 @@ public func ssh2ChannelHandleExtendedData(channel: CPointer<Unit>, mode: Int32):
     unsafe { return libssh2_channel_handle_extended_data2(channel, mode) }
 }
 
+public func ssh2ChannelDirectTcpip(session: CPointer<Unit>, host: String, port: UInt16,
+                                   originHost: String, originPort: UInt16): CPointer<Unit> {
+    unsafe {
+        let h = LibC.mallocCString(host)
+        let sh = LibC.mallocCString(originHost)
+        let ch = libssh2_channel_direct_tcpip_ex(session, h, Int32(port), sh, Int32(originPort))
+        LibC.free(h)
+        LibC.free(sh)
+        return ch
+    }
+}
+
+public func ssh2ChannelForwardListen(session: CPointer<Unit>, bindHost: String, port: UInt16,
+                                     queueMaxsize: Int32): (CPointer<Unit>, UInt16) {
+    unsafe {
+        let h = LibC.mallocCString(bindHost)
+        let hostArg = if (bindHost.isEmpty()) { CString(CPointer<UInt8>()) } else { h }
+        let boundPtr = LibC.malloc<Int32>(count: 1)
+        if (boundPtr.isNull()) {
+            LibC.free(h)
+            return (CPointer<Unit>(), 0)
+        }
+        boundPtr.write(0, 0)
+        let listener = libssh2_channel_forward_listen_ex(session, hostArg, Int32(port), boundPtr,
+                                                         queueMaxsize)
+        let bound = boundPtr.read(0)
+        LibC.free(boundPtr)
+        LibC.free(h)
+        if (listener.isNull()) {
+            return (listener, 0)
+        }
+        if (bound > 0 && bound < 65536) {
+            return (listener, UInt16(bound))
+        }
+        return (listener, port)
+    }
+}
+
+public func ssh2ChannelForwardAccept(listener: CPointer<Unit>): CPointer<Unit> {
+    unsafe { return libssh2_channel_forward_accept(listener) }
+}
+
+public func ssh2ChannelForwardCancel(listener: CPointer<Unit>): Int32 {
+    unsafe { return libssh2_channel_forward_cancel(listener) }
+}
+
 public func ssh2KeepaliveConfig(session: CPointer<Unit>, wantReply: Bool, intervalSec: UInt32): Unit {
     unsafe { libssh2_keepalive_config(session, if (wantReply) { 1 } else { 0 }, intervalSec) }
+}
+
+public const LIBSSH2_STRUCT_STAT_SIZE: Int64 = 256
+
+public const STRUCT_STAT_SIZE_OFFSET: Int64 = 48
+
+public func ssh2ScpSend(session: CPointer<Unit>, path: String, mode: Int32, size: Int64,
+                        mtime: Int64, atime: Int64): CPointer<Unit> {
+    unsafe {
+        let p = LibC.mallocCString(path)
+        let ch = libssh2_scp_send64(session, p, mode, size, mtime, atime)
+        LibC.free(p)
+        return ch
+    }
+}
+
+public func ssh2ScpRecv(session: CPointer<Unit>, path: String): (CPointer<Unit>, Int64) {
+    unsafe {
+        let p = LibC.mallocCString(path)
+        let sb = LibC.malloc<UInt8>(count: LIBSSH2_STRUCT_STAT_SIZE)
+        if (sb.isNull()) {
+            LibC.free(p)
+            return (CPointer<Unit>(), 0)
+        }
+        for (i in 0..LIBSSH2_STRUCT_STAT_SIZE) {
+            sb.write(i, 0)
+        }
+        let ch = libssh2_scp_recv2(session, p, sb)
+        var size: Int64 = 0
+        if (!ch.isNull()) {
+            size = readLe64(sb, STRUCT_STAT_SIZE_OFFSET)
+        }
+        LibC.free(sb)
+        LibC.free(p)
+        return (ch, size)
+    }
+}
+
+func readLe64(p: CPointer<UInt8>, offset: Int64): Int64 {
+    unsafe {
+        var v: UInt64 = 0
+        var i = 7
+        while (i >= 0) {
+            v = (v << 8) | UInt64(p.read(offset + i))
+            i -= 1
+        }
+        return Int64(v)
+    }
 }
 
 func readCBytes(p: CPointer<UInt8>, len: Int64): String {

@@ -1,0 +1,77 @@
+<svg viewBox="0 0 900 400" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" role="img" aria-label="Three grouped bar charts comparing GlyphNet, Go with x crypto ssh, and Python paramiko across exec throughput, SCP upload throughput, and SCP download throughput. GlyphNet leads exec and SCP upload; Go leads SCP download.">
+  <title>GlyphNet vs Go (x/crypto/ssh) vs Python (paramiko) — throughput</title>
+  <style>
+    .surface { fill: #fcfcfb; }
+    .ink-primary { fill: #0b0b0b; }
+    .ink-secondary { fill: #52514e; }
+    .ink-muted { fill: #898781; }
+    .baseline { stroke: #c3c2b7; }
+    .s1 { fill: #2a78d6; } /* GlyphNet */
+    .s2 { fill: #eb6834; } /* Go */
+    .s3 { fill: #1baf7a; } /* Python */
+    @media (prefers-color-scheme: dark) {
+      .surface { fill: #1a1a19; }
+      .ink-primary { fill: #ffffff; }
+      .ink-secondary { fill: #c3c2b7; }
+      .ink-muted { fill: #898781; }
+      .baseline { stroke: #383835; }
+      .s1 { fill: #3987e5; }
+      .s2 { fill: #d95926; }
+      .s3 { fill: #199e70; }
+    }
+  </style>
+
+  <rect class="surface" x="0" y="0" width="900" height="400" />
+
+  <text x="20" y="28" class="ink-primary" font-size="18" font-weight="600">Exec &amp; file-transfer throughput — higher is faster</text>
+  <text x="20" y="46" class="ink-secondary" font-size="12">Same OpenSSH container, one host, one run each — see README § Performance for method and caveats</text>
+
+  <!-- legend -->
+  <g font-size="12">
+    <rect x="20" y="58" width="12" height="12" rx="2" class="s1"/>
+    <text x="38" y="68" class="ink-secondary">GlyphNet</text>
+    <rect x="130" y="58" width="12" height="12" rx="2" class="s2"/>
+    <text x="148" y="68" class="ink-secondary">Go — golang.org/x/crypto/ssh + go-scp</text>
+    <rect x="430" y="58" width="12" height="12" rx="2" class="s3"/>
+    <text x="448" y="68" class="ink-secondary">Python — paramiko + scp</text>
+  </g>
+
+  <!-- Panel 1: Exec throughput (cmd/s) -->
+  <g>
+    <text x="150" y="98" text-anchor="middle" class="ink-primary" font-size="13" font-weight="600">Exec (one-shot), cmd/s</text>
+    <line x1="20" y1="284" x2="280" y2="284" class="baseline" stroke-width="1.5"/>
+    <path class="s1" d="M 77,284 V 164 A 4,4 0 0 1 81,160 H 107 A 4,4 0 0 1 111,164 V 284 Z"/>
+    <text x="94" y="150" text-anchor="middle" class="ink-primary" font-size="12" font-weight="600">286</text>
+    <path class="s2" d="M 133,284 V 183 A 4,4 0 0 1 137,179 H 163 A 4,4 0 0 1 167,183 V 284 Z"/>
+    <text x="150" y="169" text-anchor="middle" class="ink-primary" font-size="12" font-weight="600">241</text>
+    <path class="s3" d="M 189,284 V 275 A 4,4 0 0 1 193,271 H 219 A 4,4 0 0 1 223,275 V 284 Z"/>
+    <text x="206" y="261" text-anchor="middle" class="ink-primary" font-size="12" font-weight="600">22</text>
+  </g>
+
+  <!-- Panel 2: SCP upload (MB/s) -->
+  <g>
+    <text x="435" y="98" text-anchor="middle" class="ink-primary" font-size="13" font-weight="600">SCP upload, MB/s</text>
+    <line x1="305" y1="284" x2="565" y2="284" class="baseline" stroke-width="1.5"/>
+    <path class="s1" d="M 362,284 V 164 A 4,4 0 0 1 366,160 H 392 A 4,4 0 0 1 396,164 V 284 Z"/>
+    <text x="379" y="150" text-anchor="middle" class="ink-primary" font-size="12" font-weight="600">124</text>
+    <path class="s2" d="M 418,284 V 181 A 4,4 0 0 1 422,177 H 448 A 4,4 0 0 1 452,181 V 284 Z"/>
+    <text x="435" y="167" text-anchor="middle" class="ink-primary" font-size="12" font-weight="600">107</text>
+    <path class="s3" d="M 474,284 V 202 A 4,4 0 0 1 478,198 H 504 A 4,4 0 0 1 508,202 V 284 Z"/>
+    <text x="491" y="188" text-anchor="middle" class="ink-primary" font-size="12" font-weight="600">85</text>
+  </g>
+
+  <!-- Panel 3: SCP download (MB/s) -->
+  <g>
+    <text x="720" y="98" text-anchor="middle" class="ink-primary" font-size="13" font-weight="600">SCP download, MB/s</text>
+    <line x1="590" y1="284" x2="850" y2="284" class="baseline" stroke-width="1.5"/>
+    <path class="s1" d="M 647,284 V 217 A 4,4 0 0 1 651,213 H 677 A 4,4 0 0 1 681,217 V 284 Z"/>
+    <text x="664" y="203" text-anchor="middle" class="ink-primary" font-size="12" font-weight="600">221</text>
+    <path class="s2" d="M 703,284 V 164 A 4,4 0 0 1 707,160 H 733 A 4,4 0 0 1 737,164 V 284 Z"/>
+    <text x="720" y="150" text-anchor="middle" class="ink-primary" font-size="12" font-weight="600">398</text>
+    <path class="s3" d="M 759,284 V 248 A 4,4 0 0 1 763,244 H 789 A 4,4 0 0 1 793,248 V 284 Z"/>
+    <text x="776" y="234" text-anchor="middle" class="ink-primary" font-size="12" font-weight="600">118</text>
+  </g>
+
+  <text x="20" y="310" class="ink-secondary" font-size="12">Not shown (no fair unit to share an axis with): connect and shell command latency — see the table below the chart in README.</text>
+  <text x="20" y="330" class="ink-muted" font-size="11">Measured 2026-08-31 on glyphnet-sshd · Go 1.26.5, x/crypto/ssh v0.55.0, go-scp v1.6.1 · paramiko 4.0.0, scp 0.16.1 · single host, single run</text>
+</svg>
