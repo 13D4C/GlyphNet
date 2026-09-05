@@ -822,6 +822,10 @@ public class TelnetConnection <: Resource & NetworkConnection {
         return driver.exitConfigMode()
     }
 
+    public func commit(): String {
+        return driver.commit()
+    }
+
     public func isConfigMode(): Bool {
         return driver.isConfigMode()
     }

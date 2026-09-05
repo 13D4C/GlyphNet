@@ -353,6 +353,10 @@ public class SSHConnection <: Resource & NetworkConnection {
         return driver.exitConfigMode()
     }
 
+    public func commit(): String {
+        return driver.commit()
+    }
+
     public func sendConfig(commands: Array<String>): Array<String> {
         return driver.sendConfig(commands)
     }

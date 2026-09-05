@@ -52,6 +52,8 @@ public interface NetworkConnection <: Resource {
 
     func exitConfigMode(): String
 
+    func commit(): String
+
     func isConfigMode(): Bool
 
     func sendConfig(commands: Array<String>): Array<String>
@@ -303,7 +305,14 @@ class CliDriver {
         if (!isConfigMode()) {
             return ""
         }
-        let out = sendCommand(profile.exitConfigCommand)
+        var out = ""
+        if (profile.requiresCommit) {
+            let committed = sendCommand(profile.commitCommand)
+            if (!committed.isEmpty()) {
+                out = committed + "\n"
+            }
+        }
+        out += sendCommand(profile.exitConfigCommand)
         findPrompt()
         if (isConfigMode()) {
             throw CommandException(
@@ -311,6 +320,22 @@ class CliDriver {
                 "${label}; the prompt is '${basePrompt}'")
         }
         return out
+    }
+
+    func commit(): String {
+        checkOpen()
+        let profile = deviceProfile(activeDeviceType)
+        if (!profile.requiresCommit) {
+            throw CommandException(
+                "device type '${activeDeviceType}' has no commit step; its configuration " +
+                "commands take effect as they are entered")
+        }
+        if (!isConfigMode()) {
+            throw CommandException(
+                "'${profile.commitCommand}' needs configuration mode on ${label}; " +
+                "call configMode() first (the prompt is '${basePrompt}')")
+        }
+        return sendCommand(profile.commitCommand)
     }
 
     func sendConfig(commands: Array<String>): Array<String> {

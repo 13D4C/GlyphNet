@@ -119,13 +119,25 @@ public func lastNonEmptyLine(text: String): String {
     return ""
 }
 
+public func looksLikeBracketPrompt(line: String): Bool {
+    let t = line.trimAsciiEnd()
+    if (t.size < 3) {
+        return false
+    }
+    if (!t.startsWith("[") || !t.endsWith("]")) {
+        return false
+    }
+    return !t.toAsciiLower().startsWith("[edit")
+}
+
 public func promptStem(prompt: String): String {
     var s = prompt.trimAscii()
 
     while (!s.isEmpty()) {
         let bytes = s.toArray()
         let last = bytes[bytes.size - 1]
-        if (isPromptTerminator(last) || last == UInt8(32) || last == UInt8(9)) {
+        if (isPromptTerminator(last) || last == UInt8(32) || last == UInt8(9) ||
+            looksLikeBracketPrompt(s)) {
             s = String.fromUtf8(bytes[0..(bytes.size - 1)])
             continue
         }
@@ -152,7 +164,7 @@ public func looksLikePrompt(line: String, stem: String): Bool {
         return false
     }
     let bytes = t.toArray()
-    if (!isPromptTerminator(bytes[bytes.size - 1])) {
+    if (!isPromptTerminator(bytes[bytes.size - 1]) && !looksLikeBracketPrompt(t)) {
         return false
     }
     if (stem.isEmpty()) {

@@ -36,6 +36,49 @@ let IOS_XR_SHOW_VERSION: String =
 let NXOS_SHOW_VERSION: String =
     "Cisco Nexus Operating System (NX-OS) Software\n" + "  system:    version 7.3(0)D1(1)"
 
+let CISCO_ASA_SHOW_VERSION: String =
+    "Cisco Adaptive Security Appliance Software Version 9.12(4)9\n" +
+    "Firepower Extensible Operating System Version 2.6(1.192)\n" +
+    "Device Manager Version 7.13(1)\n" +
+    "System image file is \"disk0:/asa9-12-4-9-smp-k8.bin\"\n" +
+    "ciscoasa up 3 days 2 hours"
+
+let HUAWEI_VRP5_DISPLAY_VERSION: String =
+    "Huawei Versatile Routing Platform Software\n" +
+    "VRP (R) software, Version 5.170 (AR2200 V200R007C00SPC900)\n" +
+    "Copyright (C) 2011-2016 HUAWEI TECH CO., LTD\n" +
+    "Huawei AR2220E Router uptime is 3 weeks, 2 days"
+
+let HUAWEI_VRP8_DISPLAY_VERSION: String =
+    "Huawei Versatile Routing Platform Software\n" +
+    "VRP (R) software, Version 8.180 (CE6865EI V200R005C10SPC800)\n" +
+    "Copyright (C) 2012-2018 Huawei Technologies Co., Ltd.\n" +
+    "HUAWEI CE6865-48S8CQ-EI uptime is 12 days, 4 hours"
+
+let HP_COMWARE_DISPLAY_VERSION: String =
+    "HPE Comware Software, Version 7.1.070, Release 6127P02\n" +
+    "Copyright (c) 2010-2018 New H3C Technologies Co., Ltd. All rights reserved.\n" +
+    "HPE 5130 48G PoE+ 4SFP+ (370W) EI Switch uptime is 0 weeks, 3 days"
+
+let FORTINET_GET_SYSTEM_STATUS: String =
+    "Version: FortiGate-VM64 v6.4.5,build1828,210217 (GA)\n" +
+    "Virus-DB: 1.00000(2018-04-09 18:07)\n" + "Serial-Number: FGVM02TM21000000\n" +
+    "Hostname: FortiGate-VM64\n" + "Current HA mode: standalone"
+
+let PANOS_SHOW_SYSTEM_INFO: String =
+    "hostname: PA-VM\n" + "ip-address: 192.0.2.5\n" + "model: PA-VM\n" + "serial: unknown\n" +
+    "sw-version: 10.1.6\n" + "app-version: 8595-7326\n" + "threat-version: 8595-7326"
+
+let DELL_OS10_SHOW_VERSION: String =
+    "Dell EMC Networking OS10 Enterprise\n" +
+    "Copyright (c) 1999-2020 by Dell Inc. All Rights Reserved.\n" + "OS Version: 10.5.0.6\n" +
+    "Build Version: 10.5.0.6.242\n" + "System Type: S4128F-ON"
+
+let MIKROTIK_SYSTEM_RESOURCE: String =
+    "uptime: 3d4h12m\n" + "version: 6.48.6 (long-term)\n" +
+    "build-time: Dec/01/2021 09:53:29\n" + "platform: MikroTik\n" +
+    "board-name: CRS309-1G-8S+"
+
 let SHELL_ERROR_OUTPUT: String = "bash: show: command not found"
 
 @Test
@@ -126,9 +169,11 @@ class DeviceDetectionTests {
     }
 
     @TestCase
-    func refusesToGuessForUnsupportedCiscoFamilies(): Unit {
-        @Expect(matchDeviceSignature(IOS_XR_SHOW_VERSION) == DeviceType.Generic, true)
-        @Expect(matchDeviceSignature(NXOS_SHOW_VERSION) == DeviceType.Generic, true)
+    func keepsTheCiscoFamiliesApart(): Unit {
+        @Expect(matchDeviceSignature(IOS_XR_SHOW_VERSION) == DeviceType.CiscoXR, true)
+        @Expect(matchDeviceSignature(NXOS_SHOW_VERSION) == DeviceType.CiscoNXOS, true)
+        @Expect(matchDeviceSignature(CISCO_ASA_SHOW_VERSION) == DeviceType.CiscoASA, true)
+        @Expect(matchDeviceSignature(CISCO_IOS_12_SHOW_VERSION) == DeviceType.CiscoIOS, true)
     }
 
     @TestCase
@@ -189,6 +234,308 @@ class DeviceDetectionTests {
         @Expect(inConfigMode("me@junos#", DeviceType.JuniperJunOS), true)
 
         @Expect(inConfigMode("host:~$", DeviceType.Generic), false)
+    }
+}
+
+@Test
+class VendorPresetTests {
+    @TestCase
+    func newDeviceTypesUseNetmikoNames(): Unit {
+        @Expect(DeviceType.CiscoNXOS.toString(), "cisco_nxos")
+        @Expect(DeviceType.CiscoASA.toString(), "cisco_asa")
+        @Expect(DeviceType.CiscoXR.toString(), "cisco_xr")
+        @Expect(DeviceType.HuaweiVRP.toString(), "huawei")
+        @Expect(DeviceType.HuaweiVRPv8.toString(), "huawei_vrpv8")
+        @Expect(DeviceType.HPComware.toString(), "hp_comware")
+        @Expect(DeviceType.PaloAltoPanOS.toString(), "paloalto_panos")
+        @Expect(DeviceType.FortinetFortiOS.toString(), "fortinet")
+        @Expect(DeviceType.DellOS10.toString(), "dell_os10")
+        @Expect(DeviceType.MikrotikRouterOS.toString(), "mikrotik_routeros")
+    }
+
+    @TestCase
+    func netmikoNamesParseBackToTheirDeviceType(): Unit {
+        @Expect(parseDeviceType("cisco_nxos") == DeviceType.CiscoNXOS, true)
+        @Expect(parseDeviceType("cisco_asa") == DeviceType.CiscoASA, true)
+        @Expect(parseDeviceType("cisco_xr") == DeviceType.CiscoXR, true)
+        @Expect(parseDeviceType("huawei") == DeviceType.HuaweiVRP, true)
+        @Expect(parseDeviceType("huawei_vrpv8") == DeviceType.HuaweiVRPv8, true)
+        @Expect(parseDeviceType("hp_comware") == DeviceType.HPComware, true)
+        @Expect(parseDeviceType("paloalto_panos") == DeviceType.PaloAltoPanOS, true)
+        @Expect(parseDeviceType("fortinet") == DeviceType.FortinetFortiOS, true)
+        @Expect(parseDeviceType("dell_os10") == DeviceType.DellOS10, true)
+        @Expect(parseDeviceType("mikrotik_routeros") == DeviceType.MikrotikRouterOS, true)
+
+        @Expect(parseDeviceType("  CISCO_NXOS ") == DeviceType.CiscoNXOS, true)
+        @Expect(parseDeviceType("panos") == DeviceType.PaloAltoPanOS, true)
+        @Expect(parseDeviceType("routeros") == DeviceType.MikrotikRouterOS, true)
+    }
+
+    @TestCase
+    func unsupportedNetmikoNamesStayGeneric(): Unit {
+        @Expect(parseDeviceType("hp_procurve") == DeviceType.Generic, true)
+        @Expect(parseDeviceType("dell_force10") == DeviceType.Generic, true)
+        @Expect(parseDeviceType("linux") == DeviceType.Generic, true)
+    }
+
+    @TestCase
+    func pagingCommandsAreThePlatformsOwn(): Unit {
+        @Expect(deviceProfile(DeviceType.CiscoNXOS).pagingCommand, "terminal length 0")
+        @Expect(deviceProfile(DeviceType.CiscoASA).pagingCommand, "terminal pager 0")
+        @Expect(deviceProfile(DeviceType.CiscoXR).pagingCommand, "terminal length 0")
+        @Expect(deviceProfile(DeviceType.DellOS10).pagingCommand, "terminal length 0")
+        @Expect(deviceProfile(DeviceType.HuaweiVRP).pagingCommand, "screen-length 0 temporary")
+        @Expect(deviceProfile(DeviceType.HuaweiVRPv8).pagingCommand, "screen-length 0 temporary")
+        @Expect(deviceProfile(DeviceType.HPComware).pagingCommand, "screen-length disable")
+        @Expect(deviceProfile(DeviceType.PaloAltoPanOS).pagingCommand, "set cli pager off")
+        @Expect(deviceProfile(DeviceType.FortinetFortiOS).pagingCommand, "")
+        @Expect(deviceProfile(DeviceType.MikrotikRouterOS).pagingCommand, "")
+    }
+
+    @TestCase
+    func onlyTwoTierPlatformsClaimAnEnableStep(): Unit {
+        @Expect(deviceProfile(DeviceType.CiscoNXOS).supportsEnable, true)
+        @Expect(deviceProfile(DeviceType.CiscoASA).supportsEnable, true)
+        @Expect(deviceProfile(DeviceType.DellOS10).supportsEnable, true)
+        @Expect(deviceProfile(DeviceType.CiscoNXOS).enableCommand, "enable")
+
+        @Expect(deviceProfile(DeviceType.CiscoXR).supportsEnable, false)
+        @Expect(deviceProfile(DeviceType.HuaweiVRP).supportsEnable, false)
+        @Expect(deviceProfile(DeviceType.HuaweiVRPv8).supportsEnable, false)
+        @Expect(deviceProfile(DeviceType.HPComware).supportsEnable, false)
+        @Expect(deviceProfile(DeviceType.PaloAltoPanOS).supportsEnable, false)
+        @Expect(deviceProfile(DeviceType.FortinetFortiOS).supportsEnable, false)
+        @Expect(deviceProfile(DeviceType.MikrotikRouterOS).supportsEnable, false)
+    }
+
+    @TestCase
+    func configModeCommandsMatchTheVendorCli(): Unit {
+        let nxos = deviceProfile(DeviceType.CiscoNXOS)
+        @Expect(nxos.configCommand, "configure terminal")
+        @Expect(nxos.exitConfigCommand, "end")
+
+        let asa = deviceProfile(DeviceType.CiscoASA)
+        @Expect(asa.configCommand, "configure terminal")
+        @Expect(asa.exitConfigCommand, "end")
+
+        let dell = deviceProfile(DeviceType.DellOS10)
+        @Expect(dell.configCommand, "configure terminal")
+        @Expect(dell.exitConfigCommand, "end")
+
+        let huawei = deviceProfile(DeviceType.HuaweiVRP)
+        @Expect(huawei.configCommand, "system-view")
+        @Expect(huawei.exitConfigCommand, "return")
+
+        let comware = deviceProfile(DeviceType.HPComware)
+        @Expect(comware.configCommand, "system-view")
+        @Expect(comware.exitConfigCommand, "return")
+
+        let panos = deviceProfile(DeviceType.PaloAltoPanOS)
+        @Expect(panos.configCommand, "configure")
+        @Expect(panos.exitConfigCommand, "exit")
+    }
+
+    @TestCase
+    func platformsWithoutAGlobalConfigModeSaySo(): Unit {
+        @Expect(deviceProfile(DeviceType.FortinetFortiOS).supportsConfigMode, false)
+        @Expect(deviceProfile(DeviceType.FortinetFortiOS).configCommand, "")
+        @Expect(deviceProfile(DeviceType.MikrotikRouterOS).supportsConfigMode, false)
+        @Expect(deviceProfile(DeviceType.MikrotikRouterOS).configCommand, "")
+    }
+
+    @TestCase
+    func onlyCommitBasedPlatformsCarryACommitCommand(): Unit {
+        @Expect(deviceProfile(DeviceType.CiscoXR).commitCommand, "commit")
+        @Expect(deviceProfile(DeviceType.CiscoXR).requiresCommit, true)
+        @Expect(deviceProfile(DeviceType.PaloAltoPanOS).commitCommand, "commit")
+        @Expect(deviceProfile(DeviceType.PaloAltoPanOS).requiresCommit, true)
+        @Expect(deviceProfile(DeviceType.HuaweiVRPv8).commitCommand, "commit")
+        @Expect(deviceProfile(DeviceType.HuaweiVRPv8).requiresCommit, true)
+
+        @Expect(deviceProfile(DeviceType.CiscoIOS).requiresCommit, false)
+        @Expect(deviceProfile(DeviceType.AristaEOS).requiresCommit, false)
+        @Expect(deviceProfile(DeviceType.JuniperJunOS).requiresCommit, false)
+        @Expect(deviceProfile(DeviceType.CiscoNXOS).requiresCommit, false)
+        @Expect(deviceProfile(DeviceType.CiscoASA).requiresCommit, false)
+        @Expect(deviceProfile(DeviceType.DellOS10).requiresCommit, false)
+        @Expect(deviceProfile(DeviceType.HuaweiVRP).requiresCommit, false)
+        @Expect(deviceProfile(DeviceType.HPComware).requiresCommit, false)
+        @Expect(deviceProfile(DeviceType.Generic).requiresCommit, false)
+    }
+
+    @TestCase
+    func everyProfileReportsItsOwnTypeAndName(): Unit {
+        @Expect(deviceProfile(DeviceType.CiscoNXOS).displayName, "Cisco NX-OS")
+        @Expect(deviceProfile(DeviceType.CiscoXR).displayName, "Cisco IOS-XR")
+        @Expect(deviceProfile(DeviceType.HuaweiVRP).displayName, "Huawei VRP")
+        @Expect(deviceProfile(DeviceType.HPComware).displayName, "HP Comware")
+        @Expect(deviceProfile(DeviceType.PaloAltoPanOS).displayName, "Palo Alto PAN-OS")
+        @Expect(deviceProfile(DeviceType.FortinetFortiOS).displayName, "Fortinet FortiOS")
+        @Expect(deviceProfile(DeviceType.DellOS10).displayName, "Dell OS10")
+        @Expect(deviceProfile(DeviceType.MikrotikRouterOS).displayName, "MikroTik RouterOS")
+
+        for (t in [DeviceType.CiscoNXOS, DeviceType.CiscoASA, DeviceType.CiscoXR,
+                   DeviceType.HuaweiVRP, DeviceType.HuaweiVRPv8, DeviceType.HPComware,
+                   DeviceType.PaloAltoPanOS, DeviceType.FortinetFortiOS, DeviceType.DellOS10,
+                   DeviceType.MikrotikRouterOS]) {
+            @Expect(deviceProfile(t).deviceType == t, true)
+        }
+    }
+
+    @TestCase
+    func existingPresetsAreUnchanged(): Unit {
+        let ios = deviceProfile(DeviceType.CiscoIOS)
+        @Expect(ios.pagingCommand, "terminal length 0")
+        @Expect(ios.supportsEnable, true)
+        @Expect(ios.enableCommand, "enable")
+        @Expect(ios.configCommand, "configure terminal")
+        @Expect(ios.exitConfigCommand, "end")
+        @Expect(ios.commitCommand, "")
+
+        let junos = deviceProfile(DeviceType.JuniperJunOS)
+        @Expect(junos.pagingCommand, "set cli screen-length 0")
+        @Expect(junos.configCommand, "configure")
+        @Expect(junos.exitConfigCommand, "exit")
+        @Expect(junos.commitCommand, "")
+    }
+}
+
+@Test
+class VendorDetectionTests {
+    @TestCase
+    func detectsNxosAndIosXrInsteadOfRefusing(): Unit {
+        @Expect(matchDeviceSignature(NXOS_SHOW_VERSION) == DeviceType.CiscoNXOS, true)
+        @Expect(matchDeviceSignature(IOS_XR_SHOW_VERSION) == DeviceType.CiscoXR, true)
+        @Expect(matchDeviceSignature("Cisco Nexus Operating System (NX-OS) Software") ==
+                DeviceType.CiscoNXOS, true)
+    }
+
+    @TestCase
+    func detectsAsa(): Unit {
+        @Expect(matchDeviceSignature(CISCO_ASA_SHOW_VERSION) == DeviceType.CiscoASA, true)
+    }
+
+    @TestCase
+    func detectsHuaweiAndTellsV5FromV8(): Unit {
+        @Expect(matchDeviceSignature(HUAWEI_VRP5_DISPLAY_VERSION) == DeviceType.HuaweiVRP, true)
+        @Expect(matchDeviceSignature(HUAWEI_VRP8_DISPLAY_VERSION) == DeviceType.HuaweiVRPv8, true)
+    }
+
+    @TestCase
+    func detectsComwareBeforeHuawei(): Unit {
+        @Expect(matchDeviceSignature(HP_COMWARE_DISPLAY_VERSION) == DeviceType.HPComware, true)
+        @Expect(matchDeviceSignature("H3C Comware Platform Software, Software Version 5.20") ==
+                DeviceType.HPComware, true)
+    }
+
+    @TestCase
+    func detectsFortinetPanosDellAndMikrotik(): Unit {
+        @Expect(matchDeviceSignature(FORTINET_GET_SYSTEM_STATUS) == DeviceType.FortinetFortiOS,
+                true)
+        @Expect(matchDeviceSignature(PANOS_SHOW_SYSTEM_INFO) == DeviceType.PaloAltoPanOS, true)
+        @Expect(matchDeviceSignature(DELL_OS10_SHOW_VERSION) == DeviceType.DellOS10, true)
+        @Expect(matchDeviceSignature(MIKROTIK_SYSTEM_RESOURCE) == DeviceType.MikrotikRouterOS,
+                true)
+    }
+
+    @TestCase
+    func detectionStillRefusesUnknownText(): Unit {
+        @Expect(matchDeviceSignature(SHELL_ERROR_OUTPUT) == DeviceType.Generic, true)
+        @Expect(matchDeviceSignature("% Invalid input detected at '^' marker.") ==
+                DeviceType.Generic, true)
+        @Expect(matchDeviceSignature("Error: Unrecognized command found at '^' position.") ==
+                DeviceType.Generic, true)
+        @Expect(matchDeviceSignature("uptime: 3d4h12m\nversion: 6.48.6") == DeviceType.Generic,
+                true)
+    }
+
+    @TestCase
+    func detectionCommandsCoverThePlatformsThatNeedThem(): Unit {
+        @Expect(DEVICE_DETECT_COMMANDS[0], "show version")
+        @Expect(DEVICE_DETECT_COMMANDS.size, 5)
+
+        var seen = false
+        for (c in DEVICE_DETECT_COMMANDS) {
+            if (c == "display version") {
+                seen = true
+            }
+        }
+        @Expect(seen, true)
+    }
+}
+
+@Test
+class VendorPromptModeTests {
+    @TestCase
+    func enableModeIsJudgedPerPlatform(): Unit {
+        @Expect(inEnableMode("switch>", DeviceType.CiscoNXOS), false)
+        @Expect(inEnableMode("switch#", DeviceType.CiscoNXOS), true)
+        @Expect(inEnableMode("ciscoasa>", DeviceType.CiscoASA), false)
+        @Expect(inEnableMode("ciscoasa#", DeviceType.CiscoASA), true)
+        @Expect(inEnableMode("OS10>", DeviceType.DellOS10), false)
+        @Expect(inEnableMode("OS10#", DeviceType.DellOS10), true)
+
+        @Expect(inEnableMode("RP/0/RP0/CPU0:R1#", DeviceType.CiscoXR), false)
+        @Expect(inEnableMode("<Huawei>", DeviceType.HuaweiVRP), false)
+        @Expect(inEnableMode("[Huawei]", DeviceType.HuaweiVRP), false)
+        @Expect(inEnableMode("admin@PA-VM>", DeviceType.PaloAltoPanOS), false)
+        @Expect(inEnableMode("FGT #", DeviceType.FortinetFortiOS), false)
+        @Expect(inEnableMode("[admin@MikroTik] >", DeviceType.MikrotikRouterOS), false)
+    }
+
+    @TestCase
+    func configModeIsJudgedPerPlatform(): Unit {
+        @Expect(inConfigMode("switch#", DeviceType.CiscoNXOS), false)
+        @Expect(inConfigMode("switch(config)#", DeviceType.CiscoNXOS), true)
+        @Expect(inConfigMode("switch(config-if)#", DeviceType.CiscoNXOS), true)
+        @Expect(inConfigMode("ciscoasa(config)#", DeviceType.CiscoASA), true)
+        @Expect(inConfigMode("OS10(config)#", DeviceType.DellOS10), true)
+
+        @Expect(inConfigMode("RP/0/RP0/CPU0:R1#", DeviceType.CiscoXR), false)
+        @Expect(inConfigMode("RP/0/RP0/CPU0:R1(config)#", DeviceType.CiscoXR), true)
+        @Expect(inConfigMode("RP/0/RP0/CPU0:R1(config-if)#", DeviceType.CiscoXR), true)
+
+        @Expect(inConfigMode("<Huawei>", DeviceType.HuaweiVRP), false)
+        @Expect(inConfigMode("[Huawei]", DeviceType.HuaweiVRP), true)
+        @Expect(inConfigMode("[Huawei-GigabitEthernet0/0/1]", DeviceType.HuaweiVRP), true)
+        @Expect(inConfigMode("[~HUAWEI]", DeviceType.HuaweiVRPv8), true)
+        @Expect(inConfigMode("<HP>", DeviceType.HPComware), false)
+        @Expect(inConfigMode("[HP]", DeviceType.HPComware), true)
+
+        @Expect(inConfigMode("admin@PA-VM>", DeviceType.PaloAltoPanOS), false)
+        @Expect(inConfigMode("admin@PA-VM#", DeviceType.PaloAltoPanOS), true)
+
+        @Expect(inConfigMode("FGT # ", DeviceType.FortinetFortiOS), false)
+        @Expect(inConfigMode("[admin@MikroTik] >", DeviceType.MikrotikRouterOS), false)
+    }
+
+    @TestCase
+    func bracketPromptsAreRecognisedWithoutBreakingJunosEditBanners(): Unit {
+        @Expect(looksLikeBracketPrompt("[Huawei]"), true)
+        @Expect(looksLikeBracketPrompt("[Huawei-GigabitEthernet0/0/1]"), true)
+        @Expect(looksLikeBracketPrompt("[HP]"), true)
+        @Expect(looksLikeBracketPrompt("[edit]"), false)
+        @Expect(looksLikeBracketPrompt("[edit interfaces ge-0/0/0]"), false)
+        @Expect(looksLikeBracketPrompt("Router#"), false)
+        @Expect(looksLikeBracketPrompt("[]"), false)
+
+        @Expect(promptStem("[Huawei]"), "[Huawei")
+        @Expect(promptStem("<Huawei>"), "<Huawei")
+        @Expect(promptStem("[HP-GigabitEthernet1/0/1]"), "[HP-GigabitEthernet1/0/1")
+
+        @Expect(endsWithPrompt("display version\r\n[Huawei]", "[Huawei"), true)
+        @Expect(endsWithPrompt("system-view\r\n[Huawei-Vlanif10]", "[Huawei"), true)
+        @Expect(endsWithPrompt("show configuration\r\n[edit]", ""), false)
+        @Expect(endsWithPrompt("show configuration\r\n[edit]\r\nme@junos# ", ""), true)
+    }
+
+    @TestCase
+    func aHuaweiCommandLosesItsTrailingSystemViewPrompt(): Unit {
+        let raw = "display version\r\nHuawei Versatile Routing Platform Software\r\n[Huawei]"
+        @Expect(extractCommandOutput(raw, "display version", "[Huawei").contains("[Huawei]"),
+                false)
+        @Expect(extractCommandOutput(raw, "display version", "[Huawei").contains("Versatile"),
+                true)
     }
 }
 
@@ -472,6 +819,161 @@ class LiveDeviceDriverTests {
                 @Fail("expected AuthenticationException when the prompt stays unprivileged")
             } catch (e: AuthenticationException) {
                 @Expect(e.message.contains("privileged mode"), true)
+            }
+        }
+    }
+}
+
+func installFakeIosXr(conn: SSHConnection): Unit {
+    conn.sendCommand("configure() { PS1='RP/0/RP0/CPU0:R1(config)# '; }")
+    conn.sendCommand("commit() { echo 'COMMITTED_OK'; }")
+    conn.sendCommand("end() { PS1='RP/0/RP0/CPU0:R1# '; }")
+    conn.sendCommand("PS1='RP/0/RP0/CPU0:R1# '")
+    conn.findPrompt()
+    conn.redispatch(DeviceType.CiscoXR)
+}
+
+func installFakeHuawei(conn: SSHConnection): Unit {
+    conn.sendCommand("system-view() { PS1='[Huawei] '; }")
+    conn.sendCommand("return() { PS1='<Huawei> '; }")
+    conn.sendCommand("PS1='<Huawei> '")
+    conn.findPrompt()
+    conn.redispatch(DeviceType.HuaweiVRP)
+}
+
+@Test
+class LiveCommitPlatformTests {
+    @TestCase
+    func exitConfigModeCommitsOnACommitBasedPlatform(): Unit {
+        if (!liveSshConfigured()) {
+            return
+        }
+        try (conn = SSHConnection.connect(deviceTestOptions())) {
+            installFakeIosXr(conn)
+            @Expect(conn.deviceType == DeviceType.CiscoXR, true)
+            @Expect(conn.devicePreset.requiresCommit, true)
+            @Expect(conn.isConfigMode(), false)
+
+            conn.configMode()
+            @Expect(conn.prompt, "RP/0/RP0/CPU0:R1(config)#")
+            @Expect(conn.isConfigMode(), true)
+
+            let out = conn.exitConfigMode()
+            @Expect(out.contains("COMMITTED_OK"), true)
+            @Expect(conn.isConfigMode(), false)
+            @Expect(conn.prompt, "RP/0/RP0/CPU0:R1#")
+        }
+    }
+
+    @TestCase
+    func commitCanBeCalledOnItsOwnInsideConfigMode(): Unit {
+        if (!liveSshConfigured()) {
+            return
+        }
+        try (conn = SSHConnection.connect(deviceTestOptions())) {
+            installFakeIosXr(conn)
+            conn.configMode()
+            @Expect(conn.commit().contains("COMMITTED_OK"), true)
+            @Expect(conn.isConfigMode(), true)
+            conn.exitConfigMode()
+            @Expect(conn.isConfigMode(), false)
+        }
+    }
+
+    @TestCase
+    func commitRefusesOutsideConfigModeAndOffCommitPlatforms(): Unit {
+        if (!liveSshConfigured()) {
+            return
+        }
+        try (conn = SSHConnection.connect(deviceTestOptions())) {
+            installFakeIosXr(conn)
+            try {
+                conn.commit()
+                @Fail("expected CommandException for commit() outside configuration mode")
+            } catch (e: CommandException) {
+                @Expect(e.message.contains("configuration mode"), true)
+            }
+
+            conn.redispatch(DeviceType.CiscoIOS)
+            try {
+                conn.commit()
+                @Fail("expected CommandException for commit() on Cisco IOS")
+            } catch (e: CommandException) {
+                @Expect(e.message.contains("no commit step"), true)
+            }
+        }
+    }
+
+    @TestCase
+    func sendConfigCommitsBeforeLeavingConfigMode(): Unit {
+        if (!liveSshConfigured()) {
+            return
+        }
+        try (conn = SSHConnection.connect(deviceTestOptions())) {
+            installFakeIosXr(conn)
+            let outputs = conn.sendConfig(["echo XR_LINE_ONE", "echo XR_LINE_TWO"])
+            @Expect(outputs.size, 2)
+            @Expect(outputs[0].contains("XR_LINE_ONE"), true)
+            @Expect(conn.isConfigMode(), false)
+            @Expect(conn.prompt, "RP/0/RP0/CPU0:R1#")
+        }
+    }
+
+    @TestCase
+    func huaweiSystemViewIsTrackedAsConfigMode(): Unit {
+        if (!liveSshConfigured()) {
+            return
+        }
+        try (conn = SSHConnection.connect(deviceTestOptions())) {
+            installFakeHuawei(conn)
+            @Expect(conn.deviceType == DeviceType.HuaweiVRP, true)
+            @Expect(conn.prompt, "<Huawei>")
+            @Expect(conn.isConfigMode(), false)
+            @Expect(conn.isEnableMode(), false)
+
+            conn.configMode()
+            @Expect(conn.prompt, "[Huawei]")
+            @Expect(conn.isConfigMode(), true)
+            @Expect(conn.sendCommand("echo IN_SYSTEM_VIEW").contains("IN_SYSTEM_VIEW"), true)
+
+            conn.exitConfigMode()
+            @Expect(conn.prompt, "<Huawei>")
+            @Expect(conn.isConfigMode(), false)
+        }
+    }
+
+    @TestCase
+    func huaweiHasNoEnableStep(): Unit {
+        if (!liveSshConfigured()) {
+            return
+        }
+        let o = deviceTestOptions()
+        o.deviceType = DeviceType.HuaweiVRP
+        try (conn = SSHConnection.connect(o)) {
+            @Expect(conn.pagingCommand, "screen-length 0 temporary")
+            try {
+                conn.enable()
+                @Fail("expected CommandException for enable() on Huawei VRP")
+            } catch (e: CommandException) {
+                @Expect(e.message.contains("no enable mode"), true)
+            }
+        }
+    }
+
+    @TestCase
+    func fortinetRefusesConfigModeRatherThanGuessing(): Unit {
+        if (!liveSshConfigured()) {
+            return
+        }
+        let o = deviceTestOptions()
+        o.deviceType = DeviceType.FortinetFortiOS
+        try (conn = SSHConnection.connect(o)) {
+            @Expect(conn.pagingCommand, "")
+            try {
+                conn.configMode()
+                @Fail("expected CommandException for configMode() on FortiOS")
+            } catch (e: CommandException) {
+                @Expect(e.message.contains("no configuration mode"), true)
             }
         }
     }
